@@ -60,10 +60,24 @@ class OrdersConfigResolver
         return $href ? basename($href) : null;
     }
 
+    /**
+     * Возвращает ID значения customentity (как у тебя 8225... на скрине)
+     * из атрибута "Способ оплаты"
+     */
     private function paymentTypeId(object $order): ?string
     {
-        $href = $order->paymentType->meta->href ?? null;
-        return $href ? basename($href) : null;
+        $attrId = Yii::$app->params['moysklad']['paymentTypeAttrId'] ?? null;
+        if (!$attrId) return null;
+
+        foreach (($order->attributes ?? []) as $attr) {
+            if (($attr->id ?? null) !== $attrId) continue;
+
+            // value.meta.href содержит .../customentity/<entityId>/<VALUE_ID>
+            $href = $attr->value->meta->href ?? null;
+            return $href ? basename($href) : null;
+        }
+
+        return null;
     }
 
     /**

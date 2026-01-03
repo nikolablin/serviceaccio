@@ -635,7 +635,7 @@ class Moysklad extends Model
       '🔴 Ital Trade' => '98777142-d26a-11f0-0a80-1be40016550a',
       '🔵 Wolt' => 'a463b9da-d26c-11f0-0a80-1a6b0016a57a',
       '🟣 Forte Market' => 'a4481c66-d274-11f0-0a80-0f110017905c',
-      '📍 Accio' => '341ee0eb-d269-11f0-0a80-0cf20015f0d3',
+      // '📍 Accio' => '341ee0eb-d269-11f0-0a80-0cf20015f0d3',
       '💎 Юридическое лицо' => '6b625db1-d270-11f0-0a80-1512001756b3',
       '🔥 Store' => '8fe86883-d275-11f0-0a80-15120017c4b6',
       '♥️ Accio Store' => 'c4bd7d52-d276-11f0-0a80-17910017cc0c'
@@ -1359,6 +1359,10 @@ class Moysklad extends Model
     $data['attributes'] = [];
 
     foreach ($config as $ckey => $c) {
+      if (is_string($c) && $c === 'byhand') {
+        continue;
+      }
+
       switch($ckey){
         case 'id':
         case 'project':
@@ -1648,6 +1652,13 @@ class Moysklad extends Model
   public function upsertDemandFromOrder($msorder, int $localOrderId, $config, array $options = [])
   {
       $accessdata = self::getMSLoginPassword();
+
+      $configFiltered = $config;
+      foreach ($configFiltered as $k => $v) {
+        if (is_string($v) && $v === 'byhand') {
+          unset($configFiltered[$k]);
+        }
+      }
 
       $payload = $this->buildDemandPayloadFromOrder($msorder, $config, $options);
 
@@ -2363,4 +2374,60 @@ class Moysklad extends Model
 
       return ['ok' => true, 'data' => json_decode($resp)];
   }
+
+  public function updatePaymentInApplicable(string $id, bool $applicable)
+  {
+      $url = "https://api.moysklad.ru/api/remap/1.2/entity/paymentin/{$id}";
+      return $this->requestJson('PUT', $url, ['applicable' => $applicable]);
+  }
+
+  public function updateCashInApplicable(string $id, bool $applicable)
+  {
+      $url = "https://api.moysklad.ru/api/remap/1.2/entity/cashin/{$id}";
+      return $this->requestJson('PUT', $url, ['applicable' => $applicable]);
+  }
+
+  public function updatePaymentInState(string $id, array $stateMeta)
+  {
+      $url = "https://api.moysklad.ru/api/remap/1.2/entity/paymentin/{$id}";
+      return $this->requestJson('PUT', $url, ['state' => ['meta' => $stateMeta]]);
+  }
+
+  public function updateCashInState(string $id, array $stateMeta)
+  {
+      $url = "https://api.moysklad.ru/api/remap/1.2/entity/cashin/{$id}";
+      return $this->requestJson('PUT', $url, ['state' => ['meta' => $stateMeta]]);
+  }
+
+  public function createPaymentInFromOrder(object $order)
+  {
+      $url = "https://api.moysklad.ru/api/remap/1.2/entity/paymentin";
+
+      $payload = [
+          'organization' => ['meta' => $order->organization->meta],
+          'agent'        => ['meta' => $order->agent->meta],
+          'sum'          => (int)($order->sum ?? 0),
+          'customerOrder'=> ['meta' => $order->meta],
+          'applicable'   => false,
+      ];
+
+      return $this->requestJson('POST', $url, $payload);
+  }
+
+  public function createCashInFromOrder(object $order)
+  {
+      $url = "https://api.moysklad.ru/api/remap/1.2/entity/cashin";
+
+      $payload = [
+          'organization' => ['meta' => $order->organization->meta],
+          'agent'        => ['meta' => $order->agent->meta],
+          'sum'          => (int)($order->sum ?? 0),
+          'customerOrder'=> ['meta' => $order->meta],
+          'applicable'   => false,
+      ];
+
+      return $this->requestJson('POST', $url, $payload);
+  }
+
+
 }

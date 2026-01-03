@@ -42,7 +42,7 @@ class OrdersConfig extends Model
             '98777142-d26a-11f0-0a80-1be40016550a', // 🔴 Ital Trade
             'a463b9da-d26c-11f0-0a80-1a6b0016a57a', // 🔵 Wolt
             'a4481c66-d274-11f0-0a80-0f110017905c', // 🟣 Forte Market
-            '341ee0eb-d269-11f0-0a80-0cf20015f0d3', // 📍 Accio
+            // '341ee0eb-d269-11f0-0a80-0cf20015f0d3', // 📍 Accio
         ];
 
         $legalProjectId       = '6b625db1-d270-11f0-0a80-1512001756b3'; // 💎 Юридическое лицо

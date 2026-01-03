@@ -39,7 +39,7 @@ class CustomerOrderCreateHandler
         /**
          * 2️⃣ Работаем ТОЛЬКО с проектами,
          *     для которых есть конфигурация
-         */
+         */ 
          $configData = (new \app\services\OrdersConfigResolver())->resolve($order);
         // $configData = OrdersConfigTable::findOne([
         //     'project' => $projectId,
