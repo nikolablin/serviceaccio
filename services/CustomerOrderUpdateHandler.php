@@ -67,6 +67,7 @@ class CustomerOrderUpdateHandler
         /**
          * 4️⃣ Обновляем заказ в МС по конфигу (если нужно)
          */
+        unset($configData['status']);
         $updated = $moysklad->updateOrderWithConfig($order->id, $configData);
         if ($updated && !empty($updated->id)) {
             $ph = $updated->positions->meta->href ?? null;
@@ -84,18 +85,18 @@ class CustomerOrderUpdateHandler
         $stateHref = $order->state->meta->href ?? null;
         $stateId   = $stateHref ? basename($stateHref) : null;
 
+        // старый статус (после upsert уже есть запись)
+        $oldStateId = Orders::find()
+            ->select('moysklad_state_id')
+            ->where(['id' => $orderId])
+            ->scalar();
+
         /**
          * 5️⃣ Сохраняем заказ локально
          */
         $orderId = Orders::upsertFromMs($order, $projectId, 1);
         OrdersClients::upsertFromMs($orderId, $order);
         OrdersProducts::syncFromMs($orderId, $order);
-
-        // старый статус (после upsert уже есть запись)
-        $oldStateId = Orders::find()
-            ->select('moysklad_state_id')
-            ->where(['id' => $orderId])
-            ->scalar();
 
         // обновим статус, если поменялся
         if ($stateId && $oldStateId !== $stateId) {
