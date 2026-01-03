@@ -1457,7 +1457,7 @@ class Moysklad extends Model
       }
     }
 
-    $ch = curl_init('https://api.moysklad.ru/api/remap/1.2/entity/customerorder/' . $orderId . '?expand=agent,project,organization,store');
+    $ch = curl_init('https://api.moysklad.ru/api/remap/1.2/entity/customerorder/' . $orderId . '?expand=agent,project,organization,store,state');
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "PUT");
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));

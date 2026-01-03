@@ -65,7 +65,7 @@ class CustomerOrderUpdateHandler
         }
 
         /**
-         * 4️⃣ Обновляем заказ в МС по конфигу (если нужно)
+         * 4️⃣ Обновляем заказ в МС по конфигу (если нужно), убираем статус
          */
         unset($configData['status']);
         $updated = $moysklad->updateOrderWithConfig($order->id, $configData);
