@@ -1,0 +1,19 @@
+{
+  "logger": {
+    "title": "Remote Sync Acciostore"
+  },
+  "transport": "ftp",
+  "uploadOnSave": true,
+  "useAtomicWrites": false,
+  "deleteLocal": false,
+  "hostname": "89.46.33.155",
+  "port": "21",
+  "target": "service.accio.kz/",
+  "ignore": [
+    ".remote-sync.json",
+    "configuration.php"
+  ],
+  "username": "nikolablin",
+  "password": "Wpsontps!4592",
+  "watch": []
+}
