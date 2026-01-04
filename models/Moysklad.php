@@ -1733,6 +1733,8 @@ class Moysklad extends Model
       $code  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
       curl_close($ch);
 
+      file_put_contents(__DIR__ . '/../logs/ms_service/updatecustomerorder.txt',print_r($response,true) . PHP_EOL, FILE_APPEND);
+
       if ($errNo || $code < 200 || $code >= 300) {
           file_put_contents(__DIR__ . '/../logs/ms_service/createcustomerorder.txt',
               "DEMAND POST error. HTTP={$code} ERR={$err}\nResp={$response}\nPayload=" . print_r($payload,true) . "\n\n",
@@ -2228,7 +2230,7 @@ class Moysklad extends Model
       // payload
       $payload = $this->buildInvoiceOutPayloadFromOrder($msOrder, $config);
 
-      $url = 'https://api.moysklad.ru/api/remap/1.2/entity/invoiceout';
+      $url = 'https://api.moysklad.ru/api/remap/1.2/entity/invoiceout?expand=project,state,positions,paymentType,attributes';
 
       $ch = curl_init($url);
       curl_setopt_array($ch, [
@@ -2296,51 +2298,51 @@ class Moysklad extends Model
       return $payload;
   }
 
-  public function hasInvoiceOutForOrder(string $msOrderId): bool
-  {
-      $accessdata = self::getMSLoginPassword();
-
-      // фильтр по customerOrder
-      $orderHref = "https://api.moysklad.ru/api/remap/1.2/entity/customerorder/{$msOrderId}";
-
-      // в filter спецсимволы, поэтому urlencode
-      $url = 'https://api.moysklad.ru/api/remap/1.2/entity/invoiceout'
-          . '?limit=1'
-          . '&filter=' . rawurlencode('customerOrder=' . $orderHref);
-
-      $ch = curl_init($url);
-      curl_setopt_array($ch, [
-          CURLOPT_RETURNTRANSFER => true,
-          CURLOPT_CUSTOMREQUEST  => 'GET',
-          CURLOPT_ENCODING       => 'gzip',
-          CURLOPT_HTTPHEADER     => [
-              'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
-              'Accept-Encoding: gzip',
-          ],
-          CURLOPT_TIMEOUT        => (int)(Yii::$app->params['moysklad']['httpTimeout'] ?? 20),
-      ]);
-
-      $response = curl_exec($ch);
-      $errNo = curl_errno($ch);
-      $err   = $errNo ? curl_error($ch) : null;
-      $code  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-      curl_close($ch);
-
-      if ($errNo || $code < 200 || $code >= 300) {
-          file_put_contents(__DIR__ . '/../logs/ms_service/createcustomerorder.txt',
-              "INVOICEOUT CHECK error. HTTP={$code} ERR={$err}\nResp={$response}\nURL={$url}\n\n",
-              FILE_APPEND
-          );
-
-          // если чек не удался — безопаснее НЕ создавать дубликат
-          return true;
-      }
-
-      $obj = json_decode($response);
-      $rows = $obj->rows ?? [];
-
-      return !empty($rows);
-  }
+  // public function hasInvoiceOutForOrder(string $msOrderId): bool
+  // {
+  //     $accessdata = self::getMSLoginPassword();
+  //
+  //     // фильтр по customerOrder
+  //     $orderHref = "https://api.moysklad.ru/api/remap/1.2/entity/customerorder/{$msOrderId}";
+  //
+  //     // в filter спецсимволы, поэтому urlencode
+  //     $url = 'https://api.moysklad.ru/api/remap/1.2/entity/invoiceout'
+  //         . '?limit=1'
+  //         . '&filter=' . rawurlencode('customerOrder=' . $orderHref);
+  //
+  //     $ch = curl_init($url);
+  //     curl_setopt_array($ch, [
+  //         CURLOPT_RETURNTRANSFER => true,
+  //         CURLOPT_CUSTOMREQUEST  => 'GET',
+  //         CURLOPT_ENCODING       => 'gzip',
+  //         CURLOPT_HTTPHEADER     => [
+  //             'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
+  //             'Accept-Encoding: gzip',
+  //         ],
+  //         CURLOPT_TIMEOUT        => (int)(Yii::$app->params['moysklad']['httpTimeout'] ?? 20),
+  //     ]);
+  //
+  //     $response = curl_exec($ch);
+  //     $errNo = curl_errno($ch);
+  //     $err   = $errNo ? curl_error($ch) : null;
+  //     $code  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+  //     curl_close($ch);
+  //
+  //     if ($errNo || $code < 200 || $code >= 300) {
+  //         file_put_contents(__DIR__ . '/../logs/ms_service/createcustomerorder.txt',
+  //             "INVOICEOUT CHECK error. HTTP={$code} ERR={$err}\nResp={$response}\nURL={$url}\n\n",
+  //             FILE_APPEND
+  //         );
+  //
+  //         // если чек не удался — безопаснее НЕ создавать дубликат
+  //         return true;
+  //     }
+  //
+  //     $obj = json_decode($response);
+  //     $rows = $obj->rows ?? [];
+  //
+  //     return !empty($rows);
+  // }
 
   public function updateInvoiceOutState(string $invoiceOutId, array $stateMeta)
   {
@@ -2429,5 +2431,27 @@ class Moysklad extends Model
       return $this->requestJson('POST', $url, $payload);
   }
 
+  public function deleteDemand(string $id)
+  {
+      $url = "https://api.moysklad.ru/api/remap/1.2/entity/demand/{$id}";
+      return $this->requestJson('DELETE', $url);
+  }
 
+  public function deleteInvoiceOut(string $id)
+  {
+      $url = "https://api.moysklad.ru/api/remap/1.2/entity/invoiceout/{$id}";
+      return $this->requestJson('DELETE', $url);
+  }
+
+  public function deletePaymentIn(string $id)
+  {
+      $url = "https://api.moysklad.ru/api/remap/1.2/entity/paymentin/{$id}";
+      return $this->requestJson('DELETE', $url);
+  }
+
+  public function deleteCashIn(string $id)
+  {
+      $url = "https://api.moysklad.ru/api/remap/1.2/entity/cashin/{$id}";
+      return $this->requestJson('DELETE', $url);
+  }
 }

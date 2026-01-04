@@ -12,6 +12,7 @@ return [
         'd3e01366-75ca-11eb-0a80-02590037e535',
         '6d4d6565-79a4-11eb-0a80-07bf001ea079',
       ],
+      'deleteAllFromOrderState' => '02482aa0-ee91-11ea-0a80-05f20007446d',
       'orderStateInvoiceIssued' => '6d4d6565-79a4-11eb-0a80-07bf001ea079',
       'invoiceOutStateIssued' => '8cb3325d-0a72-11ed-0a80-0266001870b2',
       'stateMapOrderToDemand' => [

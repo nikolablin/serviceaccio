@@ -8,6 +8,7 @@ use app\models\Orders;
 use app\models\OrdersClients;
 use app\models\OrdersProducts;
 use app\models\OrdersDemands;
+use app\models\OrdersMoneyin;
 use app\models\OrdersInvoicesOut;
 
 class CustomerOrderUpdateHandler
@@ -88,7 +89,7 @@ class CustomerOrderUpdateHandler
         // старый статус (после upsert уже есть запись)
         $oldStateId = Orders::find()
             ->select('moysklad_state_id')
-            ->where(['id' => $orderId])
+            ->where(['moysklad_id' => (string)$order->id])
             ->scalar();
 
         /**
@@ -97,6 +98,75 @@ class CustomerOrderUpdateHandler
         $orderId = Orders::upsertFromMs($order, $projectId, 1);
         OrdersClients::upsertFromMs($orderId, $order);
         OrdersProducts::syncFromMs($orderId, $order);
+
+        if($stateId === Yii::$app->params['moysklad']['deleteAllFromOrderState']){
+          file_put_contents(__DIR__ . '/../logs/ms_service/updatecustomerorder.txt',
+              "ROLLBACK start order={$order->id}\n",
+              FILE_APPEND
+          );
+
+          // 1) Удаляем money-in (paymentin/cashin) в МС + локально
+          $moneyRows = OrdersMoneyin::find()
+              ->where(['moysklad_order_id' => (string)$order->id])
+              ->all();
+
+          foreach ($moneyRows as $mr) {
+              $docId = $mr->moysklad_doc_id ?? null;
+              $type  = $mr->doc_type ?? null;
+
+              if ($docId && $type === 'paymentin') {
+                  $res = $moysklad->deletePaymentIn($docId);
+              } elseif ($docId && $type === 'cashin') {
+                  $res = $moysklad->deleteCashIn($docId);
+              } else {
+                  $res = null;
+              }
+              $mr->delete();
+
+              file_put_contents(__DIR__ . '/../logs/ms_service/updatecustomerorder.txt',
+                  "ROLLBACK moneyin type={$type} id={$docId} ok=" . (is_array($res) ? (int)$res['ok'] : -1) . " http=" . (is_array($res) ? $res['code'] : '') . "\n",
+                  FILE_APPEND
+              );
+          }
+
+          // 2) Удаляем invoiceout в МС + локально
+          $invLink = OrdersInvoicesOut::findOne(['moysklad_order_id' => (string)$order->id]);
+          if ($invLink) {
+              $invId = $invLink->moysklad_invoiceout_id ?? null;
+              if ($invId) {
+                  $res = $moysklad->deleteInvoiceOut($invId);
+
+                  file_put_contents(__DIR__ . '/../logs/ms_service/updatecustomerorder.txt',
+                      "ROLLBACK invoiceout id={$invId} ok=" . (int)$res['ok'] . " http={$res['code']}\n",
+                      FILE_APPEND
+                  );
+              }
+              $invLink->delete();
+          }
+
+          // 3) Удаляем demand в МС + локально
+          $demLink = OrdersDemands::findOne(['moysklad_order_id' => (string)$order->id]);
+          if ($demLink) {
+              $demId = $demLink->moysklad_demand_id ?? null;
+              if ($demId) {
+                  $res = $moysklad->deleteDemand($demId);
+
+                  file_put_contents(__DIR__ . '/../logs/ms_service/updatecustomerorder.txt',
+                      "ROLLBACK demand id={$demId} ok=" . (int)$res['ok'] . " http={$res['code']}\n",
+                      FILE_APPEND
+                  );
+              }
+              $demLink->delete();
+          }
+
+          file_put_contents(__DIR__ . '/../logs/ms_service/updatecustomerorder.txt',
+              "ROLLBACK done order={$order->id}\n",
+              FILE_APPEND
+          );
+
+          // ✅ важно: дальше не продолжаем (иначе блоки создания снова накидают документы)
+          return;
+        }
 
         // обновим статус, если поменялся
         if ($stateId && $oldStateId !== $stateId) {
@@ -134,7 +204,7 @@ class CustomerOrderUpdateHandler
             }
 
             if (!$skip) {
-                $moysklad->upsertDemandFromOrder(
+                $demand = $moysklad->upsertDemandFromOrder(
                     $order,
                     $orderId,
                     $configData,
@@ -142,7 +212,7 @@ class CustomerOrderUpdateHandler
                         'sync_positions' => true,
                     ]
                 );
-
+                file_put_contents(__DIR__ . '/../logs/ms_service/updatecustomerorder.txt',print_r($demand,true) . PHP_EOL, FILE_APPEND);
                 if ($link) {
                     $link->block_demand_until = date('Y-m-d H:i:s', time() + 10);
                     $link->updated_at = date('Y-m-d H:i:s');
@@ -182,51 +252,44 @@ class CustomerOrderUpdateHandler
             }
         }
 
-        /**
-         * 9️⃣ INVOICEOUT (создать, если заказ = "Счет выставлен" и счета ещё нет)
-         *    В params:
-         *      - moysklad.orderStateInvoiceIssued (order state id)
-         *      - moysklad.invoiceOutStateIssued  (invoiceout state id = "Выставлен")
-         */
         $invoiceIssuedState = Yii::$app->params['moysklad']['orderStateInvoiceIssued'] ?? null;
         $invoiceOutState    = Yii::$app->params['moysklad']['invoiceOutStateIssued'] ?? null;
 
-        // лучше реагировать на переход статуса, чтобы не создавать/проверять на каждом UPDATE
-        if ($invoiceIssuedState && $stateId === $invoiceIssuedState && $oldStateId !== $stateId) {
+        if ($invoiceIssuedState && $stateId === $invoiceIssuedState) {
 
             $existsLocal = OrdersInvoicesOut::find()
                 ->where(['moysklad_order_id' => (string)$order->id])
                 ->exists();
 
             if (!$existsLocal) {
-                // fallback: проверка в МС (если локалка ещё пустая)
-                if (!$moysklad->hasInvoiceOutForOrder((string)$order->id)) {
 
-                    $invoice = $moysklad->createInvoiceOutFromOrder($order, $configData);
+                $invoice = $moysklad->createInvoiceOutFromOrder($order, $configData);
 
-                    if ($invoice && !is_array($invoice) && !empty($invoice->id)) {
+                // ✅ добавь лог, если не создался
+                if ($invoice === false) {
+                    file_put_contents(__DIR__ . '/../logs/ms_service/updatecustomerorder.txt',
+                        "INVOICEOUT CREATE FAIL order={$order->id}\n",
+                        FILE_APPEND
+                    );
+                }
 
-                        // поставить статус "Выставлен" вторым PUT (как ты уже сделал)
-                        if ($invoiceOutState) {
-                            $moysklad->updateInvoiceOutState(
-                                (string)$invoice->id,
-                                $moysklad->buildStateMeta('invoiceout', $invoiceOutState)
-                            );
+                if ($invoice && !is_array($invoice) && !empty($invoice->id)) {
 
-                            // опционально подтянуть state, чтобы сохранить корректно
-                            if (!empty($invoice->meta->href)) {
-                                $invoice = $moysklad->getHrefData($invoice->meta->href . '?expand=state');
-                            }
-                        }
-
-                        OrdersInvoicesOut::syncFromMsInvoiceOut(
-                            $invoice,
-                            $orderId,
-                            (string)$order->id
+                    if ($invoiceOutState) {
+                        $moysklad->updateInvoiceOutState(
+                            (string)$invoice->id,
+                            $moysklad->buildStateMeta('invoiceout', $invoiceOutState)
                         );
                     }
+
+                    OrdersInvoicesOut::syncFromMsInvoiceOut(
+                        $invoice,
+                        $orderId,
+                        (string)$order->id
+                    );
                 }
             }
         }
+
     }
 }

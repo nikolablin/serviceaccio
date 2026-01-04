@@ -650,7 +650,7 @@ class AjaxController extends Controller
 
               return $html;
               break;
-              case 'submitOrderConfig':
+            case 'submitOrderConfig':
                   parse_str($postData['formData'], $formData);
 
                   $project = trim($formData['project'] ?? '');
