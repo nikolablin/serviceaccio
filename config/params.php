@@ -6,6 +6,28 @@ return [
     'senderName' => 'Example.com mailer',
     'cronToken' => 'GNIWRNB82589NVWU',
 
+    'ukassa' => [
+      'baseUrl'    => 'https://ukassa.kz',
+      'loginPath'  => '/api/auth/login/',
+      'receiptPath'=> '/api/v1/ofd/receipt/',
+      'hashline' => 'serviceaccio',           // любой стабильный идентификатор устройства
+      'accounts' => [
+        'UK00003857' => [   'login' => 'fin@acciostore.kz',          'pwd' => 'Vm00855102@@$$'    ],
+        'UK00003854' => [   'login' => '2336623@gmail.com',          'pwd' => 'AccioToo2023@@$$'  ],
+        'UK00006240' => [   'login' => 'mazurviktoriia@gmail.com',   'pwd' => 'Ital2026@@$$'      ],
+        'UK00006241' => [   'login' => 'acciokazakhstan@gmail.com',  'pwd' => 'Scelta2026@@$$'    ],
+        'UK00003842' => [   'login' => 'ip.pastukhov90@ya.ru',       'pwd' => '901128301025Dt+'   ],
+      ],
+      'cashboxes' => [
+          'UK00003842' => 3868,
+          'UK00003857' => 3883,
+          'UK00003827' => 3853,
+          'UK00003854' => 3880,
+          'UK00006240' => 6548,
+          'UK00006241' => 6549,
+      ],
+    ],
+
     'moysklad' => [
       'loopGuardTtl' => 10,
       'allowDemandStates' => [
