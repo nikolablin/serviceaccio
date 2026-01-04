@@ -24,23 +24,23 @@ class CashRegister extends Model
     return (object)array(
       'UK00003842' => (object)array(
         'login' => 'ip.pastukhov90@ya.ru',
-        'pwd' => '901128301025Dt+'
+        'pwd' => '***'
       ),
       'UK00003857' => (object)array(
         'login' => 'fin@acciostore.kz',
-        'pwd' => 'Vm00855102@@$$'
+        'pwd' => '***'
       ),
       'UK00003854' => (object)array(
         'login' => '2336623@gmail.com',
-        'pwd' => 'AccioToo2023@@$$'
+        'pwd' => '***'
       ),
       'UK00006240' => (object)array(
         'login' => 'mazurviktoriia@gmail.com',
-        'pwd' => 'Ital2026@@$$'
+        'pwd' => '***'
       ),
       'UK00006241' => (object)array(
         'login' => 'acciokazakhstan@gmail.com',
-        'pwd' => 'Scelta2026@@$$'
+        'pwd' => '***'
       ),
     );
   }
