@@ -4,6 +4,7 @@ namespace app\services;
 
 use Yii;
 use app\models\OrdersConfigTable;
+use app\models\Moysklad;
 
 class OrdersConfigResolver
 {
@@ -14,7 +15,9 @@ class OrdersConfigResolver
      */
     public function resolve(object $order): ?OrdersConfigTable
     {
-        $projectId = $this->projectId($order);
+        $projectId  = $this->projectId($order);
+        $moysklad   = new Moysklad();
+
         if (!$projectId) return null;
 
         // 1) если по проекту ровно 1 конфиг — берём его
@@ -24,8 +27,11 @@ class OrdersConfigResolver
         }
 
         // 2) если конфигов несколько — нужна детализация
-        $paymentTypeId = $this->paymentTypeId($order);
-        $channelId     = $this->channelValueId($order);
+        $paymentAttrId = Yii::$app->params['moysklad']['paymentTypeAttrId'] ?? null;
+        $channelAttrId = Yii::$app->params['moysklad']['channelAttrId'] ?? null;
+
+        $paymentTypeId = $paymentAttrId ? $moysklad->getAttributeValueId($order, $paymentAttrId) : null;
+        $channelId     = $channelAttrId ? $moysklad->getAttributeValueId($order, $channelAttrId) : null;
 
         if (!$paymentTypeId || !$channelId) {
             // для multi-config проектов без этих полей — конфиг не выбрать
@@ -58,45 +64,5 @@ class OrdersConfigResolver
     {
         $href = $order->project->meta->href ?? null;
         return $href ? basename($href) : null;
-    }
-
-    /**
-     * Возвращает ID значения customentity (как у тебя 8225... на скрине)
-     * из атрибута "Способ оплаты"
-     */
-    private function paymentTypeId(object $order): ?string
-    {
-        $attrId = Yii::$app->params['moysklad']['paymentTypeAttrId'] ?? null;
-        if (!$attrId) return null;
-
-        foreach (($order->attributes ?? []) as $attr) {
-            if (($attr->id ?? null) !== $attrId) continue;
-
-            // value.meta.href содержит .../customentity/<entityId>/<VALUE_ID>
-            $href = $attr->value->meta->href ?? null;
-            return $href ? basename($href) : null;
-        }
-
-        return null;
-    }
-
-    /**
-     * Возвращает ID значения customentity (как у тебя 8225... на скрине)
-     * из атрибута "☎️ Каналы связи"
-     */
-    private function channelValueId(object $order): ?string
-    {
-        $attrId = Yii::$app->params['moysklad']['channelAttrId'] ?? null;
-        if (!$attrId) return null;
-
-        foreach (($order->attributes ?? []) as $attr) {
-            if (($attr->id ?? null) !== $attrId) continue;
-
-            // value.meta.href содержит .../customentity/<entityId>/<VALUE_ID>
-            $href = $attr->value->meta->href ?? null;
-            return $href ? basename($href) : null;
-        }
-
-        return null;
     }
 }

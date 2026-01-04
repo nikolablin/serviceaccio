@@ -110,13 +110,10 @@ class DemandUpdateHandler
                 );
 
                 // Определяем тип оплаты (наличные = customentity id)
-                $paymentTypeId = null;
-                $ptHref = $msOrder->paymentType->meta->href ?? null;
-                if ($ptHref) {
-                    $paymentTypeId = basename($ptHref);
-                }
+                $paymentAttrId  = Yii::$app->params['moysklad']['paymentTypeAttrId'] ?? null;
+                $paymentTypeId  = $paymentAttrId ? $moysklad->getAttributeValueId($msOrder, $paymentAttrId) : null;
 
-                $isCash = ($paymentTypeId && $paymentTypeId === (Yii::$app->params['moysklad']['cashPaymentTypeId'] ?? ''));
+                $isCash = ($paymentTypeId === (Yii::$app->params['moysklad']['cashPaymentTypeId'] ?? ''));
 
                 $docType = $isCash ? 'cashin' : 'paymentin';
 

@@ -2454,4 +2454,16 @@ class Moysklad extends Model
       $url = "https://api.moysklad.ru/api/remap/1.2/entity/cashin/{$id}";
       return $this->requestJson('DELETE', $url);
   }
+
+  public function getAttributeValueId(object $entity, string $attrId): ?string
+  {
+      foreach (($entity->attributes ?? []) as $attr) {
+          // у тебя resolver проверяет ($attr->id === $attrId)
+          if (($attr->id ?? null) !== $attrId) continue;
+
+          $href = $attr->value->meta->href ?? null;
+          return $href ? basename($href) : null;
+      }
+      return null;
+  }
 }
