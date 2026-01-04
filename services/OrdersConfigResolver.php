@@ -23,7 +23,7 @@ class OrdersConfigResolver
         // 1) если по проекту ровно 1 конфиг — берём его
         $cnt = (int)OrdersConfigTable::find()->where(['project' => $projectId])->count();
         if ($cnt === 1) {
-            return OrdersConfigTable::find()->where(['project' => $projectId])->one();
+          return OrdersConfigTable::find()->where(['project' => $projectId])->one();
         }
 
         // 2) если конфигов несколько — нужна детализация

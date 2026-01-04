@@ -13,11 +13,8 @@ class DemandUpdateHandler
 {
     public function handle(object $event): void
     {
-        if (
-            ($event->meta->type ?? null) !== 'demand'
-            || ($event->action ?? null) !== 'UPDATE'
-        ) {
-            return;
+        if ( ($event->meta->type ?? null) !== 'demand' || ($event->action ?? null) !== 'UPDATE' ) {
+          return;
         }
 
         $moysklad = new Moysklad();
