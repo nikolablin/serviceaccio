@@ -2466,4 +2466,19 @@ class Moysklad extends Model
       }
       return null;
   }
+
+  public function updateDemandApplicable(string $demandId, bool $applicable)
+  {
+     return $this->put("entity/demand/{$demandId}", ['applicable' => $applicable]);
+  }
+
+  public function updateOrderApplicable(string $orderId, bool $applicable)
+  {
+     return $this->put("entity/customerorder/{$orderId}", ['applicable' => $applicable]);
+  }
+
+  public function updateInvoiceOutApplicable(string $invoiceId, bool $applicable)
+  {
+     return $this->put("entity/invoiceout/{$invoiceId}", ['applicable' => $applicable]);
+  }
 }

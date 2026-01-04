@@ -19,11 +19,12 @@ class DemandUpdateHandler
 
         $moysklad = new Moysklad();
 
+
         /**
          * 1️⃣ Загружаем отгрузку из МС (state + positions)
          */
         $demand = $moysklad->getHrefData(
-            $event->meta->href . '?expand=state,positions'
+            $event->meta->href . '?expand=state,positions,attributes'
         );
 
         if (empty($demand->id)) {
@@ -49,9 +50,21 @@ class DemandUpdateHandler
           Yii::$app->params['moysklad']['demandStateClosed'] ?? '',
         ];
 
-        if ($demandStateId && in_array($demandStateId, $finalDemandStates, true)) {
-           // сделать 1) деньги 2) статус заказа 3) applicable=false
-        }
+        $cfg = Yii::$app->params['moysklad']['demandUpdateHandler'] ?? [];
+
+        $STATE_DEMAND_COLLECTED       = $cfg['stateDemandCollected'] ?? '';
+        $STATE_DEMAND_RETURN_NO_CHECK = $cfg['stateDemandReturnNoCheck'] ?? '';
+
+        $ATTR_FISCAL_CHECK            = $cfg['attrFiscalCheck'] ?? '';
+        $ATTR_FISCAL_CHECK_YES        = $cfg['attrFiscalCheckYes'] ?? '';
+
+        $STATE_ORDER_COLLECTED        = $cfg['stateOrderCollected'] ?? '';
+        $STATE_ORDER_RETURN           = $cfg['stateOrderReturn'] ?? '';
+
+        $STATE_INVOICE_CANCELED       = $cfg['stateInvoiceCanceled'] ?? '';
+
+        $STATE_PAYMENTIN_CANCELED     = $cfg['statePaymentInCanceled'] ?? '';
+        $STATE_CASHIN_CANCELED        = $cfg['stateCashInCanceled'] ?? '';
 
         /**
          * 3️⃣ Находим связанные заказы локально
@@ -84,6 +97,170 @@ class DemandUpdateHandler
                 continue;
             }
 
+            // 1) Всегда фиксируем статус отгрузки в локалке
+            $link->moysklad_state_id = (string)$demandStateId;
+            $link->updated_at = date('Y-m-d H:i:s');
+            $link->save(false);
+
+
+            // Ветка A: Отгрузка “Собран”
+            if ($demandStateId === $STATE_DEMAND_COLLECTED) {
+
+                // 2) Если "Фискальный чек" == Да → выбить чек
+                $fiscalVal = $moysklad->getAttributeValueId($demand, $ATTR_FISCAL_CHECK);
+                $needFiscal = ($fiscalVal === $ATTR_FISCAL_CHECK_YES);
+
+                file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
+                    "COLLECTED demand={$demand->id} order={$msOrderId} fiscalVal=" . ($fiscalVal ?? 'NULL') . " needFiscal=" . ($needFiscal ? '1':'0') . "\n",
+                    FILE_APPEND
+                );
+
+                if ($needFiscal) {
+                    /**
+                     * ⚠️ Тут нужен твой метод "выбить чек".
+                     * Я не вижу его в коде, поэтому предлагаю интерфейс:
+                     * - либо $moysklad->createFiscalCheckFromDemand($demand)
+                     * - либо $moysklad->createFiscalCheckFromOrderId($msOrderId)
+                     *
+                     * Подставь реальный метод/интеграцию (касса/ОФД).
+                     */
+                     // TODO: чек
+                     // $resCheck = $moysklad->createFiscalCheckFromDemand($demand); // <-- замени на реальный вызов
+
+                    // if (is_array($resCheck) && empty($resCheck['ok'])) {
+                    //     file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
+                    //         "FISCAL CHECK FAIL demand={$demand->id} order={$msOrderId} http={$resCheck['code']} err={$resCheck['err']} resp={$resCheck['raw']}\n",
+                    //         FILE_APPEND
+                    //     );
+                    // }
+                }
+
+                // 3) Заказу поставить статус "Собран"
+                $res = $moysklad->updateOrderState(
+                    $msOrderId,
+                    $moysklad->buildStateMeta('customerorder', $STATE_ORDER_COLLECTED)
+                );
+
+                if (is_array($res) && empty($res['ok'])) {
+                    file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
+                        "ORDER SET COLLECTED FAIL order={$msOrderId} http={$res['code']} err={$res['err']} resp={$res['raw']}\n",
+                        FILE_APPEND
+                    );
+                }
+
+                // Чтобы дальше код не перетёр статус маппингом/позициями
+                continue;
+            }
+
+
+            // Ветка B: “🚫 БЕЗ ЧЕКА - Возврат на склад”
+            if ($demandStateId === $STATE_DEMAND_RETURN_NO_CHECK) {
+
+                file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
+                    "RETURN_NO_CHECK demand={$demand->id} order={$msOrderId}\n",
+                    FILE_APPEND
+                );
+
+                // 2) Снять проводку с отгрузки
+                // Нужен метод в Moysklad (аналог updatePaymentInApplicable/updateCashInApplicable)
+                $resAppDemand = $moysklad->updateDemandApplicable((string)$demand->id, false); // <-- добавь/используй существующий
+                if (is_array($resAppDemand) && empty($resAppDemand['ok'])) {
+                    file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
+                        "DEMAND APPLICABLE OFF FAIL demand={$demand->id} http={$resAppDemand['code']} err={$resAppDemand['err']} resp={$resAppDemand['raw']}\n",
+                        FILE_APPEND
+                    );
+                }
+
+                // 3) Заказу статус "Возврат"
+                $resState = $moysklad->updateOrderState(
+                    $msOrderId,
+                    $moysklad->buildStateMeta('customerorder', $STATE_ORDER_RETURN)
+                );
+                if (is_array($resState) && empty($resState['ok'])) {
+                    file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
+                        "ORDER SET RETURN FAIL order={$msOrderId} http={$resState['code']} err={$resState['err']} resp={$resState['raw']}\n",
+                        FILE_APPEND
+                    );
+                }
+
+                // 4) Снять проводку с заказа
+                $resAppOrder = $moysklad->updateOrderApplicable($msOrderId, false); // <-- добавь/используй существующий
+                if (is_array($resAppOrder) && empty($resAppOrder['ok'])) {
+                    file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
+                        "ORDER APPLICABLE OFF FAIL order={$msOrderId} http={$resAppOrder['code']} err={$resAppOrder['err']} resp={$resAppOrder['raw']}\n",
+                        FILE_APPEND
+                    );
+                }
+
+                /**
+                 * 5-6) Счет покупателя (customerinvoice / invoiceout) — найти и аннулировать + applicable=false
+                 * Способ 1 (желательно): ищем счет через customerorder expand=invoicesOut
+                 */
+                $msOrderFull = $moysklad->getHrefData(
+                    "https://api.moysklad.ru/api/remap/1.2/entity/customerorder/{$msOrderId}?expand=invoicesOut"
+                );
+
+                $invoices = $msOrderFull->invoicesOut->rows ?? [];
+                foreach ($invoices as $inv) {
+                    $invId = $inv->id ?? null;
+                    if (!$invId) continue;
+
+                    $resInvState = $moysklad->updateInvoiceOutState($invId, $moysklad->buildStateMeta('invoiceout', $STATE_INVOICE_CANCELED)); // <-- добавить метод
+                    if (is_array($resInvState) && empty($resInvState['ok'])) {
+                        file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
+                            "INVOICE STATE FAIL invoice={$invId} order={$msOrderId} http={$resInvState['code']} err={$resInvState['err']} resp={$resInvState['raw']}\n",
+                            FILE_APPEND
+                        );
+                    }
+
+                    $resInvApp = $moysklad->updateInvoiceOutApplicable($invId, false); // <-- добавить метод
+                    if (is_array($resInvApp) && empty($resInvApp['ok'])) {
+                        file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
+                            "INVOICE APPLICABLE OFF FAIL invoice={$invId} order={$msOrderId} http={$resInvApp['code']} err={$resInvApp['err']} resp={$resInvApp['raw']}\n",
+                            FILE_APPEND
+                        );
+                    }
+                }
+
+                /**
+                 * 7) Входящий платеж / приходный ордер — отменить
+                 * Берём по нашей локальной таблице orders_moneyin, т.к. ты её уже ведёшь
+                 */
+                $money = OrdersMoneyin::find()
+                    ->where(['moysklad_demand_id' => (string)$demand->id])
+                    ->orderBy(['id' => SORT_DESC])
+                    ->one();
+
+                if ($money && !empty($money->moysklad_doc_id)) {
+                    $docId = (string)$money->moysklad_doc_id;
+
+                    if ($money->doc_type === 'paymentin') {
+                        $moysklad->updatePaymentInState($docId, $moysklad->buildStateMeta('paymentin', $STATE_PAYMENTIN_CANCELED));
+                        $moysklad->updatePaymentInApplicable($docId, false);
+                        $money->moysklad_state_id = $STATE_PAYMENTIN_CANCELED;
+                        $money->applicable = 0;
+                        $money->updated_at = date('Y-m-d H:i:s');
+                        $money->save(false);
+                    } elseif ($money->doc_type === 'cashin') {
+                        $moysklad->updateCashInState($docId, $moysklad->buildStateMeta('cashin', $STATE_CASHIN_CANCELED));
+                        $moysklad->updateCashInApplicable($docId, false);
+                        $money->moysklad_state_id = $STATE_CASHIN_CANCELED;
+                        $money->applicable = 0;
+                        $money->updated_at = date('Y-m-d H:i:s');
+                        $money->save(false);
+                    }
+                } else {
+                    file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
+                        "MONEYIN NOT FOUND demand={$demand->id} order={$msOrderId}\n",
+                        FILE_APPEND
+                    );
+                }
+
+                // Чтобы дальше не синкались позиции и не мапился статус поверх возврата
+                continue;
+            }
+
+
             /**
              * =========================
              * ✅ FINAL DEMAND STATES LOGIC
@@ -94,16 +271,12 @@ class DemandUpdateHandler
              * + идемпотентность по (demand_id + doc_type)
              * =========================
              */
-            $finalDemandStates = [
-                Yii::$app->params['moysklad']['demandStatePassed'] ?? '',
-                Yii::$app->params['moysklad']['demandStateClosed'] ?? '',
-            ];
 
             if ($demandStateId && in_array($demandStateId, $finalDemandStates, true)) {
 
                 // 1) Грузим заказ из МС (нужны sum, agent, organization, paymentType)
                 $msOrder = $moysklad->getHrefData(
-                    "https://api.moysklad.ru/api/remap/1.2/entity/customerorder/{$msOrderId}?expand=agent,organization,paymentType"
+                    "https://api.moysklad.ru/api/remap/1.2/entity/customerorder/{$msOrderId}?expand=agent,organization,paymentType,attributes"
                 );
 
                 // Определяем тип оплаты (наличные = customentity id)
@@ -218,6 +391,7 @@ class DemandUpdateHandler
                         );
                     }
                 }
+                continue;
             }
 
             /**

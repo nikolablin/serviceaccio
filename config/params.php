@@ -28,7 +28,21 @@ return [
       ],
       'demandStatePassed' => '732ffbde-0a19-11eb-0a80-055600083d2e',
       'demandStateClosed' => '24d4a11f-8af4-11eb-0a80-0122002915d0',
+      'demandUpdateHandler' => [
+        'stateDemandCollected'    => 'eeed10b7-51a2-11ec-0a80-02ee0032e089',
+        'stateDemandReturnNoCheck'=> '0ba2e09c-cda1-11eb-0a80-03110030c70c',
 
+        'attrFiscalCheck'         => 'eb46b957-a4e7-11eb-0a80-014c00169cca',
+        'attrFiscalCheckYes'      => 'c3c0ee4f-a4e7-11eb-0a80-075b00176e05',
+
+        'stateOrderCollected'     => 'c4d8f685-a7c3-11ed-0a80-10870015dd4a',
+        'stateOrderReturn'        => '02482e52-ee91-11ea-0a80-05f200074472',
+
+        'stateInvoiceCanceled'    => '8cb333d7-0a72-11ed-0a80-0266001870b4',
+
+        'statePaymentInCanceled'  => '529982b4-346a-11eb-0a80-04cd00042955',
+        'stateCashInCanceled'     => '735c68bc-f6ce-11eb-0a80-0153001141cf',
+      ],
       // order state:
       'orderStateCompleted' => '02482dd6-ee91-11ea-0a80-05f200074471',
 
