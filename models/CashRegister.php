@@ -45,6 +45,17 @@ class CashRegister extends Model
             throw new \RuntimeException("UKassa credentials incomplete for cash_register={$cashRegisterCode}");
         }
 
+        // ✅ КЭШ ТОКЕНА (по кассе)
+        $ttl = (int)($cfg['tokenCacheTtl'] ?? 0);
+        $cacheKey = 'ukassa_token_' . $cashRegisterCode;
+
+        if ($ttl > 0 && isset(Yii::$app->cache)) {
+            $cached = Yii::$app->cache->get($cacheKey);
+            if (is_string($cached) && $cached !== '') {
+                return $cached;
+            }
+        }
+
         $res = self::loginUkassaUser($login, $pwd, $hashline);
 
         $token = self::extractToken($res);
@@ -53,6 +64,11 @@ class CashRegister extends Model
                 "UKassa login ok but token missing for cash_register={$cashRegisterCode}: " .
                 json_encode($res, JSON_UNESCAPED_UNICODE)
             );
+        }
+
+        // ✅ сохраняем токен
+        if ($ttl > 0 && isset(Yii::$app->cache)) {
+            Yii::$app->cache->set($cacheKey, $token, $ttl);
         }
 
         return $token;

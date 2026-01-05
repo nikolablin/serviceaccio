@@ -8,9 +8,31 @@ use app\models\Orders;
 use app\models\OrdersDemands;
 use app\models\OrdersProducts;
 use app\models\OrdersMoneyin;
+use app\models\CashRegister;
+use app\models\OrdersReceipts;
+use app\models\OrdersConfigTable;
 
 class DemandUpdateHandler
 {
+    private function resolveCashRegisterCodeForOrder(object $order): string
+    {
+        // project id из MS-заказа (uuid)
+        $projectId = (string)($order->project->id ?? '');
+
+        if ($projectId === '') {
+            return '';
+        }
+
+        $cfg = OrdersConfigTable::find()
+            ->select(['cash_register'])
+            ->where(['project' => $projectId])
+            ->asArray()
+            ->one();
+
+        $code = (string)($cfg['cash_register'] ?? '');
+        return trim($code);
+    }
+
     public function handle(object $event): void
     {
         if ( ($event->meta->type ?? null) !== 'demand' || ($event->action ?? null) !== 'UPDATE' ) {
@@ -116,23 +138,95 @@ class DemandUpdateHandler
                 );
 
                 if ($needFiscal) {
-                    /**
-                     * ⚠️ Тут нужен твой метод "выбить чек".
-                     * Я не вижу его в коде, поэтому предлагаю интерфейс:
-                     * - либо $moysklad->createFiscalCheckFromDemand($demand)
-                     * - либо $moysklad->createFiscalCheckFromOrderId($msOrderId)
-                     *
-                     * Подставь реальный метод/интеграцию (касса/ОФД).
-                     */
-                     // TODO: чек
-                     // $resCheck = $moysklad->createFiscalCheckFromDemand($demand); // <-- замени на реальный вызов
 
-                    // if (is_array($resCheck) && empty($resCheck['ok'])) {
-                    //     file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
-                    //         "FISCAL CHECK FAIL demand={$demand->id} order={$msOrderId} http={$resCheck['code']} err={$resCheck['err']} resp={$resCheck['raw']}\n",
-                    //         FILE_APPEND
-                    //     );
-                    // }
+                    // 1) Берём кассу из конфигов по проекту
+                    $cashRegisterCode = $this->resolveCashRegisterCodeForOrder($order);
+
+                    if ($cashRegisterCode === '') {
+                        file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
+                            "FISCAL SKIP: cash_register empty (no config) demand={$demand->id}\n",
+                            FILE_APPEND
+                        );
+                    } else {
+
+                        // 2) Идемпотентность: если уже есть draft/sent для этой отгрузки — второй раз не создаём
+                        $existingReceiptId = OrdersReceipts::find()
+                            ->select(['id'])
+                            ->where([
+                                'moysklad_demand_id' => (string)$demand->id,
+                                'receipt_type'       => 'sale',
+                                'cash_register'      => $cashRegisterCode,
+                            ])
+                            ->orderBy(['id' => SORT_DESC])
+                            ->scalar();
+
+                        if ($existingReceiptId) {
+                            $dry = CashRegister::sendReceiptById((int)$existingReceiptId, true);
+
+                            file_put_contents(__DIR__ . '/../logs/ms_service/ukassa_receipt_dryrun.txt',
+                                "DRYRUN EXISTING receipt_id={$existingReceiptId}\n" .
+                                "URL={$dry['url']}\n" .
+                                "HEADERS=" . implode('; ', $dry['headers']) . "\n" .
+                                "PAYLOAD=" . json_encode($dry['payload'], JSON_UNESCAPED_UNICODE) . "\n----\n",
+                                FILE_APPEND
+                            );
+                        } else {
+
+                            // 3) items/payments собираешь как и планировали (из demand->positions)
+                            $items = [];
+                            foreach (($demand->positions->rows ?? []) as $pos) {
+                                $a = $pos->assortment ?? null;
+
+                                $name = (string)($a->name ?? 'Товар');
+                                $code = (string)($a->code ?? ($a->article ?? ''));
+                                if ($code === '') $code = 'MS-' . (string)($a->id ?? 'item');
+
+                                $qty  = (int)round((float)($pos->quantity ?? 1));
+                                $unit = (int)round(((int)($pos->price ?? 0)) / 100); // проверь у себя масштаб цен
+
+                                $items[] = [
+                                    'code' => $code,
+                                    'name' => $name,
+                                    'quantity' => max(1, $qty),
+                                    'unit_price' => max(0, $unit),
+                                    'tax_rate' => (int)($pos->vat ?? 0),
+                                    'section_code' => Yii::$app->params['ukassa']['sectionCodeDefault'] ?? '0',
+                                    'measure_unit_code' => Yii::$app->params['ukassa']['measureUnitDefault'] ?? '796',
+                                ];
+                            }
+
+                            $dataReceipt = [
+                                'operation_type' => 2,
+                                'items' => $items,
+                                'payments' => [
+                                    ['type' => (int)(Yii::$app->params['ukassa']['paymentTypeDefault'] ?? 0), 'sum_' => 0]
+                                ],
+                                'is_return_html' => false,
+                            ];
+
+                            $metaReceipt = [
+                                'order_id' => (int)($orderModel->id ?? 0),
+                                'moysklad_order_id' => (string)($order->id ?? ''),
+                                'moysklad_demand_id' => (string)($demand->id ?? ''),
+                                'receipt_type' => 'sale',
+                                'idempotency_key' => 'demand_' . (string)$demand->id,
+                            ];
+
+                            // 4) сохраняем draft в БД
+                            $receiptId = CashRegister::createReceiptDraft($cashRegisterCode, $metaReceipt, $dataReceipt);
+
+                            // 5) BREAKPOINT: dryRun — ничего не отправляет, только возвращает payload
+                            $dry = CashRegister::sendReceiptById($receiptId, true);
+
+                            file_put_contents(__DIR__ . '/../logs/ms_service/ukassa_receipt_dryrun.txt',
+                                "DRYRUN receipt_id={$receiptId}\n" .
+                                "URL={$dry['url']}\n" .
+                                "HEADERS=" . implode('; ', $dry['headers']) . "\n" .
+                                "PAYLOAD=" . json_encode($dry['payload'], JSON_UNESCAPED_UNICODE) . "\n----\n",
+                                FILE_APPEND
+                            );
+                        }
+                    }
                 }
 
                 // 3) Заказу поставить статус "Собран"

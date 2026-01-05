@@ -11,6 +11,7 @@ return [
       'loginPath'  => '/api/auth/login/',
       'receiptPath'=> '/api/v1/ofd/receipt/',
       'hashline' => 'serviceaccio',           // любой стабильный идентификатор устройства
+      'tokenCacheTtl' => 60 * 60 * 12,
       'accounts' => [
         'UK00003857' => [   'login' => 'fin@acciostore.kz',          'pwd' => 'Vm00855102@@$$'    ],
         'UK00003854' => [   'login' => '2336623@gmail.com',          'pwd' => 'AccioToo2023@@$$'  ],
