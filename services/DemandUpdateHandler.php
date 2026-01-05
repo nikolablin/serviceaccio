@@ -174,6 +174,7 @@ class DemandUpdateHandler
 
                             // 3) items/payments собираешь как и планировали (из demand->positions)
                             $items = [];
+                            $totalSum = 0;
                             foreach (($demand->positions->rows ?? []) as $pos) {
                                 $a = $pos->assortment ?? null;
 
@@ -184,14 +185,17 @@ class DemandUpdateHandler
                                 $qty  = (int)round((float)($pos->quantity ?? 1));
                                 $unit = (int)round(((int)($pos->price ?? 0)) / 100); // проверь у себя масштаб цен
 
+                                $totalSum += $qty * $unit;
+
                                 $items[] = [
+                                    'is_storno' => false,
                                     'code' => $code,
                                     'name' => $name,
                                     'quantity' => max(1, $qty),
                                     'unit_price' => max(0, $unit),
-                                    'tax_rate' => (int)($pos->vat ?? 0),
-                                    'section_code' => Yii::$app->params['ukassa']['sectionCodeDefault'] ?? '0',
-                                    'measure_unit_code' => Yii::$app->params['ukassa']['measureUnitDefault'] ?? '796',
+                                    'tax_rate' => Yii::$app->params['ukassa']['taxRate'],
+                                    'section_code' => '0',
+                                    'total_amount' => $qty * $unit,
                                 ];
                             }
 
@@ -199,17 +203,20 @@ class DemandUpdateHandler
                                 'operation_type' => 2,
                                 'items' => $items,
                                 'payments' => [
-                                    ['type' => (int)(Yii::$app->params['ukassa']['paymentTypeDefault'] ?? 0), 'sum_' => 0]
+                                    [
+                                      'type' => (int)(Yii::$app->params['ukassa']['paymentTypeDefault'] ?? 0),
+                                      'sum_' => $totalSum
+                                    ] // Нужно определять по типу платежа
                                 ],
                                 'is_return_html' => false,
                             ];
 
                             $metaReceipt = [
-                                'order_id' => (int)($orderModel->id ?? 0),
-                                'moysklad_order_id' => (string)($order->id ?? ''),
-                                'moysklad_demand_id' => (string)($demand->id ?? ''),
-                                'receipt_type' => 'sale',
-                                'idempotency_key' => 'demand_' . (string)$demand->id,
+                                'order_id'            => (int)($orderModel->id ?? 0),
+                                'moysklad_order_id'   => (string)($order->id ?? ''),
+                                'moysklad_demand_id'  => (string)($demand->id ?? ''),
+                                'receipt_type'        => 'sale',
+                                'idempotency_key'     => 'demand_' . (string)$demand->id,
                             ];
 
                             // 4) сохраняем draft в БД

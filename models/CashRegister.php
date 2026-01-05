@@ -139,8 +139,6 @@ class CashRegister extends Model
         if (!$payments) throw new \RuntimeException('payments is required');
 
         $total = 0;
-        $taxTotal = 0.0;
-
         foreach ($items as $i => $it) {
             $qty  = (int)($it['quantity'] ?? 0);
             $unit = (int)($it['unit_price'] ?? 0);
@@ -148,29 +146,6 @@ class CashRegister extends Model
 
             $items[$i]['total_amount'] = $line;
             $total += $line;
-
-            if (!isset($items[$i]['tax_amount'])) {
-                $rate = (float)($it['tax_rate'] ?? 0);
-                $tax  = $rate > 0 ? ($line - ($line / (1 + $rate / 100))) : 0;
-                $items[$i]['tax_amount'] = round($tax, 2);
-            }
-            $taxTotal += (float)$items[$i]['tax_amount'];
-
-            // дефолты
-            $items[$i] += [
-                'is_storno' => false,
-                'catalog_id' => 0,
-                'section_code' => (string)($it['section_code'] ?? '0'),
-                'excise_stamp' => '',
-                'mark_code' => '',
-                'physical_label' => '',
-                'product_id' => '',
-                'barcode' => $it['barcode'] ?? '',
-                'ntin' => (string)($it['ntin'] ?? ''),
-                'list_excise_stamp' => (array)($it['list_excise_stamp'] ?? []),
-                'measure_unit_code' => (string)($it['measure_unit_code'] ?? '796'),
-                'discount' => ['is_storno' => false, 'sum_' => 0],
-            ];
         }
 
         $taken = 0;
@@ -186,7 +161,6 @@ class CashRegister extends Model
             'cashbox_id'     => $cashboxId,
             'items'          => array_values($items),
             'payments'       => array_values($payments),
-            'tax_amount'     => round($taxTotal, 2),
             'amounts'        => [
                 'total'    => $total,
                 'taken'    => $taken,
@@ -406,4 +380,95 @@ class CashRegister extends Model
             'headers_raw' => $rawHeaders,
         ];
     }
+
+    private static function ukassaGetJson(
+        string $url,
+        array $headers = [],
+        bool $withResponseHeaders = false
+    ): array {
+        // ✅ гарантируем обязательные заголовки
+        $baseHeaders = [
+            'Accept: application/json',
+        ];
+
+        // чистим входные заголовки от дублей Accept / Content-Type
+        $headers = array_values(array_filter($headers, function ($h) {
+            $h = strtolower(trim((string)$h));
+            return $h !== ''
+                && !str_starts_with($h, 'accept:')
+                && !str_starts_with($h, 'content-type:');
+        }));
+
+        $finalHeaders = array_merge($baseHeaders, $headers);
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CUSTOMREQUEST  => 'GET',
+            CURLOPT_HTTPHEADER     => $finalHeaders,
+            CURLOPT_TIMEOUT        => 30,
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_HEADER         => $withResponseHeaders,
+        ]);
+
+        $resp = curl_exec($ch);
+        $err  = $resp === false ? curl_error($ch) : null;
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+        $rawHeaders = null;
+        $rawBody = $resp;
+
+        if ($withResponseHeaders && is_string($resp)) {
+            $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+            $rawHeaders = substr($resp, 0, $headerSize);
+            $rawBody    = substr($resp, $headerSize);
+        }
+
+        curl_close($ch);
+
+        $ok = ($err === null) && ($code >= 200 && $code < 300);
+        $json = (is_string($rawBody) && $rawBody !== '')
+            ? json_decode($rawBody, true)
+            : null;
+
+        return [
+            'ok'           => $ok,
+            'code'         => $code,
+            'err'          => $err,
+            'raw'          => $rawBody,
+            'json'         => $json,
+            'url'          => $url,
+            'headers_raw'  => $rawHeaders,
+        ];
+    }
+
+    /* =========================================================
+     * ADDONS
+     * ========================================================= */
+
+     public static function getDepartmentData($cashboxNum)
+     {
+       $cashboxId = self::getCashboxIdByRegister($cashboxNum);
+       $token     = self::getUkassaTokenByCashRegister($cashboxNum);
+       $url       = self::ukassaUrl('departmentPath', '/api/v1/company/department/cashbox/'.$cashboxId.'/');
+
+       $res = self::ukassaGetJson(
+          $url,
+          [
+              'Authorization: ' . $token,
+              'Content-Type: application/json'
+          ],
+          true // если нужны response headers
+      );
+
+      print('<pre>');
+      print_r($res);
+      print('</pre>');
+
+      if (!$res['ok']) {
+          throw new \RuntimeException(
+              "UKassa GET failed http={$res['code']} err={$res['err']} body={$res['raw']}"
+          );
+      }
+     }
 }
