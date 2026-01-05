@@ -2401,14 +2401,20 @@ class Moysklad extends Model
       return $this->requestJson('PUT', $url, ['state' => ['meta' => $stateMeta]]);
   }
 
-  public function createPaymentInFromOrder(object $order)
+  public function createPaymentInFromOrder(object $order, object $demand)
   {
       $url = "https://api.moysklad.ru/api/remap/1.2/entity/paymentin";
 
       $payload = [
           'organization' => ['meta' => $order->organization->meta],
           'agent'        => ['meta' => $order->agent->meta],
-          'sum'          => (int)($order->sum ?? 0),
+          'sum'          => (int)($demand->sum ?? 0),
+          'operations'   => [
+            [
+              'meta'      => $demand->meta,         // <-- Привязка к отгрузке
+              'linkedSum' => (int)($demand->sum ?? 0)
+            ]
+          ],
           'customerOrder'=> ['meta' => $order->meta],
           'applicable'   => false,
       ];
@@ -2416,7 +2422,7 @@ class Moysklad extends Model
       return $this->requestJson('POST', $url, $payload);
   }
 
-  public function createCashInFromOrder(object $order)
+  public function createCashInFromOrder(object $order, object $demand)
   {
       $url = "https://api.moysklad.ru/api/remap/1.2/entity/cashin";
 
@@ -2424,6 +2430,12 @@ class Moysklad extends Model
           'organization' => ['meta' => $order->organization->meta],
           'agent'        => ['meta' => $order->agent->meta],
           'sum'          => (int)($order->sum ?? 0),
+          'operations'   => [
+            [
+              'meta'      => $demand->meta,         // <-- Привязка к отгрузке
+              'linkedSum' => (int)($demand->sum ?? 0)
+            ]
+          ],
           'customerOrder'=> ['meta' => $order->meta],
           'applicable'   => false,
       ];

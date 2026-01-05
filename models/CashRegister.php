@@ -49,14 +49,20 @@ class CashRegister extends Model
         $ttl = (int)($cfg['tokenCacheTtl'] ?? 0);
         $cacheKey = 'ukassa_token_' . $cashRegisterCode;
 
-        if ($ttl > 0 && isset(Yii::$app->cache)) {
-            $cached = Yii::$app->cache->get($cacheKey);
-            if (is_string($cached) && $cached !== '') {
-                return $cached;
-            }
-        }
+        // if ($ttl > 0 && isset(Yii::$app->cache)) {
+        //     $cached = Yii::$app->cache->get($cacheKey);
+        //     if (is_string($cached) && $cached !== '') {
+        //         return $cached;
+        //     }
+        // }
 
         $res = self::loginUkassaUser($login, $pwd, $hashline);
+
+        file_put_contents(__DIR__ . '/../logs/ms_service/ukassa_receipt_dryrun.txt',
+            print_r($res,true) . "\n----\n",
+            FILE_APPEND
+        );
+        exit();
 
         $token = self::extractToken($res);
         if (!$token) {
@@ -256,9 +262,11 @@ class CashRegister extends Model
         if (empty($receipt->request_json)) throw new \RuntimeException("Receipt {$receiptId}: request_json is empty");
 
         $payload = json_decode($receipt->request_json, true);
+
         if (!is_array($payload)) throw new \RuntimeException("Receipt {$receiptId}: request_json invalid JSON");
 
         $url = self::ukassaUrl('receiptPath', '/api/v1/ofd/receipt/');
+
         $token = self::getUkassaTokenByCashRegister($receipt->cash_register);
 
         $headers = [
@@ -288,6 +296,13 @@ class CashRegister extends Model
 
         // ✅ real send
         $res = self::ukassaPostJson($url, $payload, $headers, false);
+
+        file_put_contents(__DIR__ . '/../logs/ms_service/ukassa_receipt_dryrun.txt',
+            print_r($res,true) . "\n----\n",
+            FILE_APPEND
+        );
+        exit();
+
 
         $receipt->response_json = $res['raw'] ?: null;
         $receipt->ukassa_status = $res['ok'] ? 'sent' : 'error';
