@@ -1,10 +1,10 @@
 <?php
-use app\models\CashRegister;
+// use app\models\CashRegister;
+//
+// ini_set('display_errors', '1');
+// error_reporting(E_ALL);
 
-ini_set('display_errors', '1');
-error_reporting(E_ALL);
-
-CashRegister::getDepartmentData('UK00003857');
+// CashRegister::getDepartmentData('UK00003857');
 
 // 1) Данные для чека (упрощённо)
 // $data = [

@@ -204,6 +204,9 @@ class DemandUpdateHandler
                                 $qty  = (int)round((float)($pos->quantity ?? 1));
                                 $unit = (int)round(((int)($pos->price ?? 0)) / 100); // проверь у себя масштаб цен
 
+                                $ntin = $moysklad->getProductAttribute($a->attributes,'594f2460-e4af-11f0-0a80-192e0037459c');
+                                $ntin = (!$ntin) ? '-' : $ntin->value;
+
                                 $totalSum += $qty * $unit;
 
                                 $items[] = [
@@ -212,6 +215,7 @@ class DemandUpdateHandler
                                     'name' => $name,
                                     'quantity' => max(1, $qty),
                                     'unit_price' => max(0, $unit),
+                                    'ntin' => $ntin,
                                     'tax_rate' => Yii::$app->params['ukassa']['taxRate'],
                                     'section_code' => '0',
                                     'total_amount' => $qty * $unit,

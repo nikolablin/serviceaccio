@@ -62,7 +62,6 @@ class CashRegister extends Model
             print_r($res,true) . "\n----\n",
             FILE_APPEND
         );
-        exit();
 
         $token = self::extractToken($res);
         if (!$token) {
