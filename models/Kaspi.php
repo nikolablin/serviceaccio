@@ -238,24 +238,23 @@ class Kaspi extends Model
     return json_decode($response);
   }
 
-  public function setKaspiReadyForDelivery($kaspiOrderCode,$kaspiOrderExtId,$numberOfPlaces,$status,$get)
+  public function setKaspiReadyForDelivery($kaspiOrderCode,$numberOfPlaces,$status,$organizationId)
   {
     $kaspiOrders            = new KaspiOrders();
     $telegram               = new Telegram();
     $moysklad               = new Moysklad();
 
     $order                  = (object)array();
-    $order->kaspiOrderExtId = $kaspiOrderExtId;
     $order->kaspiOrderId    = $kaspiOrderCode;
     $order->numOfPlaces     = $numberOfPlaces;
 
-    switch (trim($get['orgId'] ?? '')) {
-      case '1e0488ad-0a26-11ec-0a80-05760004991d': $order->shopId = 'accio'; break;
-      case '3bd63649-f257-11ea-0a80-005d003d9ee4': $order->shopId = 'ItalFood'; break;
-      case '640cb82e-82af-11ed-0a80-07fe00255908': $order->shopId = 'kasta'; break;
+    switch (trim($organizationId ?? '')) {
+      case '5f351348-d269-11f0-0a80-15120016d622': $order->shopId = 'accio'; break;
+      case '98777142-d26a-11f0-0a80-1be40016550a': $order->shopId = 'ItalFood'; break;
+      case '431a8172-d26a-11f0-0a80-0f110016cabd': $order->shopId = 'kasta'; break;
       default:
           $telegram->sendTelegramMessage(
-              'Kaspi readyForDelivery: неизвестный orgId=' . ($get['orgId'] ?? 'NULL') . ' для заказа #' . $kaspiOrderCode,
+              'Kaspi readyForDelivery: неизвестный orgId=' . ($organizationId ?? 'NULL') . ' для заказа #' . $kaspiOrderCode,
               'kaspi'
           );
           return;
@@ -272,6 +271,8 @@ class Kaspi extends Model
             );
             return;
         }
+
+        $order->kaspiOrderExtId = $dbOrder->extOrderId;
 
         // 1) Идемпотентность: выполняем дальше только если статус "created"
         if (($dbOrder->status ?? null) !== 'created') {

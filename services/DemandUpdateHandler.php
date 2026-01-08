@@ -12,6 +12,7 @@ use app\models\CashRegister;
 use app\models\OrdersReceipts;
 use app\models\OrdersConfigTable;
 use app\models\OrdersSalesReturns;
+use app\models\Kaspi;
 
 class DemandUpdateHandler
 {
@@ -41,12 +42,13 @@ class DemandUpdateHandler
         }
 
         $moysklad = new Moysklad();
+        $kaspi = new Kaspi();
 
         /**
          * 1️⃣ Загружаем отгрузку из МС (state + positions)
          */
         $demand = $moysklad->getHrefData(
-            $event->meta->href . '?expand=state,positions,attributes'
+            $event->meta->href . '?expand=state,positions,attributes,project'
         );
 
         if (empty($demand->id)) {
@@ -141,7 +143,7 @@ class DemandUpdateHandler
             $link->save(false);
 
 
-            // Ветка A: Отгрузка “Собран”
+            // Ветка: Отгрузка “Собран”
             if ($demandStateId === $STATE_DEMAND_COLLECTED) {
 
                 // 2) Если "Фискальный чек" == Да → выбить чек
@@ -154,7 +156,6 @@ class DemandUpdateHandler
                 );
 
                 if ($needFiscal) {
-
                     // 1) Берём кассу из конфигов по проекту
                     $cashRegisterCode = $this->resolveCashRegisterCodeForOrder($msOrder);
 
@@ -164,7 +165,7 @@ class DemandUpdateHandler
                             FILE_APPEND
                         );
                     } else {
-                        // 2) Идемпотентность: если уже есть draft/sent для этой отгрузки — второй раз не создаём
+                        // 2) Идемпотентность: если уже есть чек — НЕ создаём новый, а обновляем текущий и отправляем снова
                         $existingReceiptId = OrdersReceipts::find()
                             ->select(['id'])
                             ->where([
@@ -175,90 +176,108 @@ class DemandUpdateHandler
                             ->orderBy(['id' => SORT_DESC])
                             ->scalar();
 
-                        if ($existingReceiptId) {
-                            $dry = CashRegister::sendReceiptById((int)$existingReceiptId, false);
+                        // 3) Собираем items/payments ВСЕГДА (чтобы и обновление, и создание использовали одинаковый payload)
+                        $items = [];
+                        $totalSum = 0;
 
-                            file_put_contents(__DIR__ . '/../logs/ms_service/ukassa_receipt_dryrun.txt',
-                                print_r($dry,true) . "\n----\n",
-                                FILE_APPEND
-                            );
+                        foreach (($demand->positions->rows ?? []) as $pos) {
+                            $a = $pos->assortment ?? null;
 
-                            file_put_contents(__DIR__ . '/../logs/ms_service/ukassa_receipt_dryrun.txt',
-                                "DRYRUN EXISTING receipt_id={$existingReceiptId}\n" .
-                                "URL={$dry['url']}\n" .
-                                "HEADERS=" . implode('; ', $dry['headers']) . "\n" .
-                                "PAYLOAD=" . json_encode($dry['payload'], JSON_UNESCAPED_UNICODE) . "\n----\n",
-                                FILE_APPEND
-                            );
+                            $name = (string)($a->name ?? 'Товар');
+                            $code = (string)($a->code ?? ($a->article ?? ''));
+                            if ($code === '') $code = 'MS-' . (string)($a->id ?? 'item');
+
+                            $qty  = (int)round((float)($pos->quantity ?? 1));
+                            $unit = (int)round(((int)($pos->price ?? 0)) / 100);
+
+                            $ntin = $moysklad->getProductAttribute($a->attributes,'594f2460-e4af-11f0-0a80-192e0037459c');
+                            $ntin = (!$ntin) ? '-' : $ntin->value;
+
+                            $totalSum += $qty * $unit;
+
+                            $items[] = [
+                                'is_storno'    => false,
+                                'code'         => $code,
+                                'name'         => $name,
+                                'quantity'     => max(1, $qty),
+                                'unit_price'   => max(0, $unit),
+                                'ntin'         => $ntin,
+                                'tax_rate'     => Yii::$app->params['ukassa']['taxRate'],
+                                'section_code' => '0',
+                                'total_amount' => $qty * $unit,
+                            ];
                         }
-                        else {
 
-                            // 3) items/payments собираешь как и планировали (из demand->positions)
-                            $items = [];
-                            $totalSum = 0;
-                            foreach (($demand->positions->rows ?? []) as $pos) {
-                                $a = $pos->assortment ?? null;
+                        $dataReceipt = [
+                            'operation_type'  => (int)Yii::$app->params['ukassa']['operationTypeSell'],
+                            'items'           => $items,
+                            'payments'        => [
+                                [
+                                    'type' => 1,        // Картой (потом можно определить от paymentType)
+                                    'sum_' => $totalSum
+                                ]
+                            ],
+                            'is_return_html' => false,
+                        ];
 
-                                $name = (string)($a->name ?? 'Товар');
-                                $code = (string)($a->code ?? ($a->article ?? ''));
-                                if ($code === '') $code = 'MS-' . (string)($a->id ?? 'item');
+                        // 4) Если чек уже есть — обновляем его запись, если нет — создаём черновик
+                        if ($existingReceiptId) {
 
-                                $qty  = (int)round((float)($pos->quantity ?? 1));
-                                $unit = (int)round(((int)($pos->price ?? 0)) / 100); // проверь у себя масштаб цен
+                            /** @var OrdersReceipts $receipt */
+                            $receipt = OrdersReceipts::findOne((int)$existingReceiptId);
 
-                                $ntin = $moysklad->getProductAttribute($a->attributes,'594f2460-e4af-11f0-0a80-192e0037459c');
-                                $ntin = (!$ntin) ? '-' : $ntin->value;
+                            if ($receipt) {
+                                // обновляем payload
+                                $receipt->request_json  = json_encode($dataReceipt, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-                                $totalSum += $qty * $unit;
+                                // по желанию: сбросить результат прошлой отправки (чтобы было видно новый прогон)
+                                $receipt->response_json = null;
+                                $receipt->error_text    = null;
+                                $receipt->ukassa_status = 'prepared'; // или 'draft' как у тебя принято
 
-                                $items[] = [
-                                    'is_storno' => false,
-                                    'code' => $code,
-                                    'name' => $name,
-                                    'quantity' => max(1, $qty),
-                                    'unit_price' => max(0, $unit),
-                                    'ntin' => $ntin,
-                                    'tax_rate' => Yii::$app->params['ukassa']['taxRate'],
-                                    'section_code' => '0',
-                                    'total_amount' => $qty * $unit,
-                                ];
+                                $receipt->updated_at    = date('Y-m-d H:i:s');
+                                $receipt->save(false);
                             }
 
-                            $dataReceipt = [
-                                'operation_type'  => (int)Yii::$app->params['ukassa']['operationTypeSell'],
-                                'items'           => $items,
-                                'payments'        => [
-                                    [
-                                      'type' => 1, // Картой
-                                      'sum_' => $totalSum
-                                    ] // Нужно определять по типу платежа
-                                ],
-                                'is_return_html' => false,
-                            ];
+                            $receiptId = (int)$existingReceiptId;
 
+                        } else {
                             $metaReceipt = [
                                 'order_id'            => (int)($orderModel->id ?? 0),
                                 'moysklad_order_id'   => (string)($msOrder->id ?? ''),
                                 'moysklad_demand_id'  => (string)($demand->id ?? ''),
                                 'receipt_type'        => 'sale',
-                                'idempotency_key'     => 'demand_' . (string)$demand->id,
+                                'idempotency_key'     => 'demand_' . (string)$demand->id, // оставляем стабильным
                             ];
 
-                            // 4) сохраняем draft в БД
                             $receiptId = CashRegister::createReceiptDraft($cashRegisterCode, $metaReceipt, $dataReceipt);
-
-                            // 5) BREAKPOINT: dryRun — ничего не отправляет, только возвращает payload
-                            $dry = CashRegister::sendReceiptById($receiptId, false);
-
-                            file_put_contents(__DIR__ . '/../logs/ms_service/ukassa_receipt_dryrun.txt',
-                                "DRYRUN receipt_id={$receiptId}\n" .
-                                "URL={$dry['url']}\n" .
-                                "HEADERS=" . implode('; ', $dry['headers']) . "\n" .
-                                "PAYLOAD=" . json_encode($dry['payload'], JSON_UNESCAPED_UNICODE) . "\n----\n",
-                                FILE_APPEND
-                            );
                         }
+
+                        // 5) В ЛЮБОМ СЛУЧАЕ отправляем в UKassa
+                        $sent = CashRegister::sendReceiptById((int)$receiptId, false);
+
+                        // лог
+                        file_put_contents(__DIR__ . '/../logs/ms_service/ukassa_receipt_send.txt',
+                            "SEND receipt_id={$receiptId}\n" .
+                            "RESULT=" . print_r($sent, true) . "\n----\n",
+                            FILE_APPEND
+                        );
                     }
+                }
+
+                // Если заказ Каспи, то нужно получить накладные и добавить их
+                if (in_array($msOrder->project->id, Yii::$app->params['moysklad']['kaspiProjects'], true)) {
+                  $kaspiOrderNum = $moysklad->getProductAttribute($msOrder->attributes,'a7f0812d-a0a3-11ed-0a80-114f003fc7f9');
+                  $kaspiOrderNum = (!$kaspiOrderNum) ? '-' : $kaspiOrderNum->value;
+
+                  $kaspiExtOrderNum = '';
+
+                  $placesNum = $moysklad->getProductAttribute($demand->attributes,'f1d4a71a-c29a-11eb-0a80-001f0003a1be');
+                  $placesNum = (!$placesNum) ? 1 : $placesNum->value;
+
+                  $orgId = basename($demand->organization->meta->href) : null;
+
+                  $kaspi->setKaspiReadyForDelivery($kaspiOrderNum,$placeNum,'readyForDelivery',$orgId);
                 }
 
                 // 3) Заказу поставить статус "Собран"
@@ -279,7 +298,7 @@ class DemandUpdateHandler
             }
 
 
-            // Ветка B: “🚫 БЕЗ ЧЕКА - Возврат на склад”
+            // Ветка: “🚫 БЕЗ ЧЕКА - Возврат на склад”
             if ($demandStateId === $STATE_DEMAND_RETURN_NO_CHECK) {
 
                 file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
@@ -557,6 +576,7 @@ class DemandUpdateHandler
             }
 
 
+            // Ветка "ЗАвершен"/"Закрыт"
             /**
              * =========================
              * ✅ FINAL DEMAND STATES LOGIC
@@ -567,7 +587,6 @@ class DemandUpdateHandler
              * + идемпотентность по (demand_id + doc_type)
              * =========================
              */
-
             if ($demandStateId && in_array($demandStateId, $finalDemandStates, true)) {
                 // 1) Грузим заказ из МС (нужны sum, agent, organization, paymentType)
 

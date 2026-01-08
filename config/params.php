@@ -83,6 +83,10 @@ return [
       'channelAttrId' => '45bdad04-68d6-11ee-0a80-095d000776da', // ☎️ Каналы связи
       'paymentTypeAttrId' => '19fb8dcf-94ac-11ed-0a80-0e930023e914',
       'configFallbackByPaymentType' => false, // по желанию
-
+      'kaspiProjects' => [
+        '5f351348-d269-11f0-0a80-15120016d622', // 🔴 Kaspi Accio
+        '431a8172-d26a-11f0-0a80-0f110016cabd', // 🔴 Tutto Capsule Kaspi
+        '98777142-d26a-11f0-0a80-1be40016550a', // 🔴 Ital Trade
+      ]
     ],
 ];
