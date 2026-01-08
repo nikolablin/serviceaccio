@@ -28,6 +28,8 @@ return [
           'UK00006240' => 6548,
           'UK00006241' => 6549,
       ],
+      'operationTypeReturn' => 3,
+      'operationTypeSell'   => 2
     ],
 
     'moysklad' => [
@@ -55,6 +57,7 @@ return [
       'demandUpdateHandler' => [
         'stateDemandCollected'    => 'eeed10b7-51a2-11ec-0a80-02ee0032e089',
         'stateDemandReturnNoCheck'=> '0ba2e09c-cda1-11eb-0a80-03110030c70c',
+        'stateDemandDoReturn'     => '2a6c9db5-a7c4-11ed-0a80-10870015e950',
 
         'attrFiscalCheck'         => 'eb46b957-a4e7-11eb-0a80-014c00169cca',
         'attrFiscalCheckYes'      => 'c3c0ee4f-a4e7-11eb-0a80-075b00176e05',

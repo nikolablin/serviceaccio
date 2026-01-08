@@ -2493,4 +2493,36 @@ class Moysklad extends Model
   {
      return $this->put("entity/invoiceout/{$invoiceId}", ['applicable' => $applicable]);
   }
+ 
+  public function createSalesReturnFromDemand(object $order, object $demand): array
+  {
+      $url = "https://api.moysklad.ru/api/remap/1.2/entity/salesreturn";
+
+      $positions = [];
+      foreach (($demand->positions->rows ?? []) as $pos) {
+          if (empty($pos->assortment->meta)) continue;
+
+          $positions[] = [
+              'assortment' => ['meta' => $pos->assortment->meta],
+              'quantity'   => (float)($pos->quantity ?? 0),
+              'price'      => (int)($pos->price ?? 0), // в МС цена обычно в копейках
+              // 'vat'      => ... при необходимости
+          ];
+      }
+
+      $payload = [
+          'organization' => ['meta' => $order->organization->meta],
+          'agent'        => ['meta' => $order->agent->meta],
+
+          // ВАЖНО: привязка возврата к отгрузке
+          'demand'       => ['meta' => $demand->meta],
+
+          // Чтобы возврат был “черновиком” (проводку снимем отдельно или сразу false)
+          'applicable'   => false,
+
+          'positions'    => $positions,
+      ];
+
+      return $this->requestJson('POST', $url, $payload);
+  }
 }

@@ -37,6 +37,17 @@ class SalesReturnUpdateHandler
         $srStateHref = $sr->state->meta->href ?? null;
         if (!$srStateHref) return;
 
+
+
+
+echo 'ok';
+exit();
+
+
+
+
+
+
         // ✅ обновляем возврат в БД
         OrdersSalesReturns::syncFromMs($sr, $moysklad);
 

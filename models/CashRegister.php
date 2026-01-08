@@ -311,6 +311,9 @@ class CashRegister extends Model
         $receipt->save(false);
 
         $res['receipt_id'] = $receiptId;
+        $res['url']        = $url;
+        $res['headers']    = $headers;
+        $res['payload']    = $payload;
         return $res;
     }
 

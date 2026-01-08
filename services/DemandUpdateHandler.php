@@ -11,6 +11,7 @@ use app\models\OrdersMoneyin;
 use app\models\CashRegister;
 use app\models\OrdersReceipts;
 use app\models\OrdersConfigTable;
+use app\models\OrdersSalesReturns;
 
 class DemandUpdateHandler
 {
@@ -40,7 +41,6 @@ class DemandUpdateHandler
         }
 
         $moysklad = new Moysklad();
-
 
         /**
          * 1️⃣ Загружаем отгрузку из МС (state + positions)
@@ -87,6 +87,8 @@ class DemandUpdateHandler
 
         $STATE_PAYMENTIN_CANCELED     = $cfg['statePaymentInCanceled'] ?? '';
         $STATE_CASHIN_CANCELED        = $cfg['stateCashInCanceled'] ?? '';
+
+        $STATE_DEMAND_DO_RETURN       = $cfg['stateDemandDoReturn'] ?? '';
 
         /**
          * 3️⃣ Находим связанные заказы локально
@@ -223,11 +225,11 @@ class DemandUpdateHandler
                             }
 
                             $dataReceipt = [
-                                'operation_type' => 2,
-                                'items' => $items,
-                                'payments' => [
+                                'operation_type'  => (int)Yii::$app->params['ukassa']['operationTypeSell'],
+                                'items'           => $items,
+                                'payments'        => [
                                     [
-                                      'type' => (int)(Yii::$app->params['ukassa']['paymentTypeDefault'] ?? 0),
+                                      'type' => 1, // Картой
                                       'sum_' => $totalSum
                                     ] // Нужно определять по типу платежа
                                 ],
@@ -383,6 +385,174 @@ class DemandUpdateHandler
                 }
 
                 // Чтобы дальше не синкались позиции и не мапился статус поверх возврата
+                continue;
+            }
+
+
+            // Ветка: “Провести возврат”
+            if ($demandStateId === $STATE_DEMAND_DO_RETURN) {
+
+                file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
+                    "DO_RETURN demand={$demand->id} order={$msOrderId}\n",
+                    FILE_APPEND
+                );
+
+                // 0) Идемпотентность по нашей БД: если уже есть возврат по этой отгрузке — повторно не создаём
+                $existingReturn = OrdersSalesreturns::find()
+                    ->where([
+                        'moysklad_order_id'  => (string)$msOrderId,
+                        'moysklad_demand_id' => (string)$demand->id,
+                    ])
+                    ->orderBy(['id' => SORT_DESC])
+                    ->one();
+
+                if ($existingReturn && !empty($existingReturn->moysklad_salesreturn_id)) {
+
+                    file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
+                        "DO_RETURN SKIP (already exists) salesreturn={$existingReturn->moysklad_salesreturn_id}\n",
+                        FILE_APPEND
+                    );
+
+                } else {
+
+                    // 1) Создаём документ Возврат покупателя (salesreturn)
+                    $resSr = $moysklad->createSalesReturnFromDemand($msOrder, $demand);
+
+                    if (is_array($resSr) && empty($resSr['ok'])) {
+                        file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
+                            "SALESRETURN CREATE FAIL demand={$demand->id} order={$msOrderId} http={$resSr['code']} err={$resSr['err']} resp={$resSr['raw']}\n",
+                            FILE_APPEND
+                        );
+                        continue;
+                    }
+
+                    $sr   = is_array($resSr) ? ($resSr['json'] ?? null) : $resSr;
+                    $srId = (string)($sr->id ?? '');
+
+                    if ($srId === '') {
+                        file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
+                            "SALESRETURN CREATE FAIL: empty id demand={$demand->id}\n",
+                            FILE_APPEND
+                        );
+                        continue;
+                    }
+
+                    // 2) Пишем в таблицу acs43_orders_salesreturns
+                    $row = $existingReturn ?: new OrdersSalesreturns();
+                    $row->order_id               = (int)$orderModel->id;
+                    $row->moysklad_order_id      = (string)$msOrderId;
+                    $row->moysklad_demand_id     = (string)$demand->id;
+                    $row->moysklad_salesreturn_id= (string)$srId;
+                    $row->moysklad_state_id      = (string)$demandStateId;
+                    $row->salesreturn_state_id   = (string)($sr->state->meta->href ?? ''); // если хочешь хранить state id — лучше basename() ниже
+                    $row->created_at             = $row->created_at ?: date('Y-m-d H:i:s');
+                    $row->updated_at             = date('Y-m-d H:i:s');
+                    $row->save(false);
+
+                    file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
+                        "SALESRETURN OK id={$srId} row_id={$row->id}\n",
+                        FILE_APPEND
+                    );
+
+                    // 3) Создаём чек возврата (пока логика чека отдельная “дилемма”, но каркас такой же как sale)
+                    $cashRegisterCode = $this->resolveCashRegisterCodeForOrder($msOrder);
+
+                    if ($cashRegisterCode === '') {
+                        file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
+                            "RETURN RECEIPT SKIP: cash_register empty demand={$demand->id}\n",
+                            FILE_APPEND
+                        );
+                    } else {
+                        // идемпотентность по чеку возврата
+                        $existingReceiptId = OrdersReceipts::find()
+                            ->select(['id'])
+                            ->where([
+                                'moysklad_demand_id' => (string)$demand->id,
+                                'receipt_type'       => 'return', // <— ВАЖНО: чтобы sale и return не конфликтовали
+                                'cash_register'      => $cashRegisterCode,
+                            ])
+                            ->orderBy(['id' => SORT_DESC])
+                            ->scalar();
+
+                        if (!$existingReceiptId) {
+                            $items = [];
+                            $totalSum = 0;
+
+                            foreach (($demand->positions->rows ?? []) as $pos) {
+                                $a = $pos->assortment ?? null;
+
+                                $name = (string)($a->name ?? 'Товар');
+                                $code = (string)($a->code ?? ($a->article ?? ''));
+                                if ($code === '') $code = 'MS-' . (string)($a->id ?? 'item');
+
+                                $qty  = (int)round((float)($pos->quantity ?? 1));
+                                $unit = (int)round(((int)($pos->price ?? 0)) / 100); // проверь у себя масштаб цен
+
+                                $ntin = $moysklad->getProductAttribute($a->attributes,'594f2460-e4af-11f0-0a80-192e0037459c');
+                                $ntin = (!$ntin) ? '-' : $ntin->value;
+
+                                $totalSum += $qty * $unit;
+
+                                $items[] = [
+                                    'is_storno' => false,
+                                    'code' => $code,
+                                    'name' => $name,
+                                    'quantity' => max(1, $qty),
+                                    'unit_price' => max(0, $unit),
+                                    'ntin' => $ntin,
+                                    'tax_rate' => Yii::$app->params['ukassa']['taxRate'],
+                                    'section_code' => '0',
+                                    'total_amount' => $qty * $unit,
+                                ];
+                            }
+
+                            $dataReceipt = [
+                                'operation_type'  => (int)Yii::$app->params['ukassa']['operationTypeSell'],
+                                'items'           => $items,
+                                'payments'        => [
+                                    [
+                                      'type' => 1, // Картой
+                                      'sum_' => $totalSum
+                                    ] // Нужно определять по типу платежа
+                                ],
+                                'is_return_html' => false,
+                            ];
+
+                            $metaReceipt = [
+                                'order_id'            => (int)($orderModel->id ?? 0),
+                                'moysklad_order_id'   => (string)($msOrder->id ?? ''),
+                                'moysklad_demand_id'  => (string)($demand->id ?? ''),
+                                'receipt_type'        => 'sale',
+                                'idempotency_key'     => 'demand_' . (string)$demand->id,
+                            ];
+
+                            $receiptId = CashRegister::createReceiptDraft($cashRegisterCode, $metaReceipt, $dataReceipt);
+
+                            // отправляем реально (dryrun=false)
+                            $sent = CashRegister::sendReceiptById((int)$receiptId, false);
+
+                            file_put_contents(__DIR__ . '/../logs/ms_service/ukassa_receipt_return.txt',
+                                "RETURN RECEIPT receipt_id={$receiptId}\n" .
+                                "RESULT=" . print_r($sent, true) . "\n----\n",
+                                FILE_APPEND
+                            );
+                        }
+                    }
+                }
+
+                // 4) Заказу ставим статус Возврат
+                $resState = $moysklad->updateOrderState(
+                    $msOrderId,
+                    $moysklad->buildStateMeta('customerorder', $STATE_ORDER_RETURN_FINAL)
+                );
+
+                if (is_array($resState) && empty($resState['ok'])) {
+                    file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
+                        "ORDER SET RETURN FAIL order={$msOrderId} http={$resState['code']} err={$resState['err']} resp={$resState['raw']}\n",
+                        FILE_APPEND
+                    );
+                }
+
                 continue;
             }
 
