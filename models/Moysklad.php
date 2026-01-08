@@ -1797,6 +1797,85 @@ class Moysklad extends Model
     return false;
   }
 
+  public static function setFileToDemand($demandId,$fileUrl)
+  {
+    $accessdata = self::getMSLoginPassword();
+
+    $ext      = pathinfo($fileUrl, PATHINFO_EXTENSION);
+    if(!$ext OR empty($ext)){
+      $ext = 'pdf';
+    }
+    $fileData = file_get_contents($fileUrl);
+    $base64   = base64_encode($fileData);
+
+    $data = array();
+    $obj  = (object)array();
+    $obj->filename = 'Накладная_' . date('Y-m-d_His') . '.' . $ext;
+    $obj->content = $base64;
+    $data[] = $obj;
+    $curl = curl_init();
+
+    curl_setopt_array($curl, array(
+      CURLOPT_URL => 'https://api.moysklad.ru/api/remap/1.2/entity/demand/' . $demandId . '/files',
+      CURLOPT_RETURNTRANSFER => true,
+      CURLOPT_ENCODING => '',
+      CURLOPT_MAXREDIRS => 10,
+      CURLOPT_TIMEOUT => 0,
+      CURLOPT_FOLLOWLOCATION => true,
+      CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+      CURLOPT_CUSTOMREQUEST => 'POST',
+      CURLOPT_POSTFIELDS => json_encode($data),
+      CURLOPT_HTTPHEADER => array(
+        'Connection: Keep-Alive',
+        'Accept-Encoding: gzip',
+        'Content-Type: application/json',
+        'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
+      ),
+    ));
+
+
+    $response = curl_exec($curl);
+
+    file_put_contents(__DIR__ . '/setFileQuery.txt',print_r($data,true));
+    file_put_contents(__DIR__ . '/setFileResponse.txt',print_r($response,true));
+
+    curl_close($curl);
+  }
+
+  public static function markWaybillDelivery($demandId)
+  {
+    $accessdata = self::getMSLoginPassword();
+
+    $data = (object)array();
+    $data->attributes     = array();
+
+    $attributeMarkWaybill = (object)array();
+    $attributeMarkWaybill->meta = (object)array();
+    $attributeMarkWaybill->meta->href = 'https://api.moysklad.ru/api/remap/1.2/entity/demand/metadata/attributes/60dbcc74-a9e6-11ed-0a80-111e001b5386';
+    $attributeMarkWaybill->meta->type = 'attributemetadata';
+    $attributeMarkWaybill->meta->mediaType = 'application/json';
+    $attributeMarkWaybill->value = true;
+    array_push($data->attributes,$attributeMarkWaybill);
+
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL,"https://api.moysklad.ru/api/remap/1.2/entity/demand/" . $demandId);
+    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PUT');
+    curl_setopt($ch, CURLOPT_POSTFIELDS,json_encode($data));
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_ENCODING, '');
+    curl_setopt($ch, CURLOPT_MAXREDIRS, 10);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 0);
+
+    $headers = [
+      'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
+      'Content-Type: application/json',
+      'Accept-Encoding: gzip'
+    ];
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    $server_output = json_decode(curl_exec ($ch));
+    curl_close ($ch);
+  }
+
   public function productRemainsCheckByArray($sku,$quantity,$remains,$productId)
   {
     $response = (object)array();
@@ -2493,7 +2572,7 @@ class Moysklad extends Model
   {
      return $this->put("entity/invoiceout/{$invoiceId}", ['applicable' => $applicable]);
   }
- 
+
   public function createSalesReturnFromDemand(object $order, object $demand): array
   {
       $url = "https://api.moysklad.ru/api/remap/1.2/entity/salesreturn";

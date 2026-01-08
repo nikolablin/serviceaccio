@@ -4,6 +4,9 @@ namespace app\models;
 use Yii;
 use yii\base\Model;
 use app\models\OrdersDemands;
+use app\models\KaspiOrders;
+use app\models\Telegram;
+use app\models\Moysklad;
 
 class Kaspi extends Model
 {
@@ -194,5 +197,144 @@ class Kaspi extends Model
 
     return $points;
   }
+
+  public static function getKaspiOrder($orderId,$shopid,$checkwaybill = false)
+  {
+    $token = self::getKaspiToken($shopid);
+
+    $curl = curl_init();
+    $goreturn = false;
+
+    do {
+      sleep(3);
+
+      curl_setopt_array($curl, array(
+        CURLOPT_URL => 'https://kaspi.kz/shop/api/v2/orders?filter[orders][code]=' . $orderId,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_ENCODING => '',
+        CURLOPT_MAXREDIRS => 10,
+        CURLOPT_TIMEOUT => 0,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+        CURLOPT_CUSTOMREQUEST => 'GET',
+        CURLOPT_HTTPHEADER => array(
+          'X-Auth-Token: ' . $token
+        ),
+      ));
+
+      $response = curl_exec($curl);
+
+      if($checkwaybill){
+        if(!empty(json_decode($response)->data[0]->attributes->kaspiDelivery->waybill)){
+          $goreturn = true;
+        }
+      }
+      else {
+        $goreturn = true;
+      }
+
+    } while ( $goreturn == false );
+
+    return json_decode($response);
+  }
+
+  public function setKaspiReadyForDelivery($kaspiOrderCode,$kaspiOrderExtId,$numberOfPlaces,$status,$get)
+  {
+    $kaspiOrders            = new KaspiOrders();
+    $telegram               = new Telegram();
+    $moysklad               = new Moysklad();
+
+    $order                  = (object)array();
+    $order->kaspiOrderExtId = $kaspiOrderExtId;
+    $order->kaspiOrderId    = $kaspiOrderCode;
+    $order->numOfPlaces     = $numberOfPlaces;
+
+    switch (trim($get['orgId'] ?? '')) {
+      case '1e0488ad-0a26-11ec-0a80-05760004991d': $order->shopId = 'accio'; break;
+      case '3bd63649-f257-11ea-0a80-005d003d9ee4': $order->shopId = 'ItalFood'; break;
+      case '640cb82e-82af-11ed-0a80-07fe00255908': $order->shopId = 'kasta'; break;
+      default:
+          $telegram->sendTelegramMessage(
+              'Kaspi readyForDelivery: неизвестный orgId=' . ($get['orgId'] ?? 'NULL') . ' для заказа #' . $kaspiOrderCode,
+              'kaspi'
+          );
+          return;
+    }
+
+    switch($status) {
+      case 'readyForDelivery':
+        $dbOrder = KaspiOrders::findByCode($order->kaspiOrderId);
+
+        if (!$dbOrder) {
+            $telegram->sendTelegramMessage(
+                'Kaspi readyForDelivery: заказ #' . $order->kaspiOrderId . ' (' . $order->shopId . ') не найден в БД.',
+                'kaspi'
+            );
+            return;
+        }
+
+        // 1) Идемпотентность: выполняем дальше только если статус "created"
+        if (($dbOrder->status ?? null) !== 'created') {
+            return;
+        }
+
+        // 2) В Kaspi меняем статус заказа
+        self::setKaspiOrderStatus($order, 'ASSEMBLE', $order->shopId);
+        $telegram->sendTelegramMessage(
+            'Заказ Kaspi #' . $order->kaspiOrderId . ' (' . $order->shopId . ') успешно помечен к отправке.',
+            'kaspi'
+        );
+
+        // 3) В БД обновляем статус через модель
+        $dbOrder->updateStatus('assemble');
+
+        // 4) Получаем waybill (из API Kaspi)
+        $orderData = self::getKaspiOrder($order->kaspiOrderId, $order->shopId, true);
+        file_put_contents(__DIR__ . '/orderdata.txt', print_r($orderData, true) . PHP_EOL . PHP_EOL, FILE_APPEND);
+
+        $waybillLink = null;
+        if (!empty($orderData->data) && !empty($orderData->data[0]->attributes->kaspiDelivery->waybill)) {
+            $waybillLink = $orderData->data[0]->attributes->kaspiDelivery->waybill;
+        }
+
+        if (!$waybillLink) {
+            // Накладной нет — просто выходим
+            return;
+        }
+
+        // 6) Если waybill уже записан — не повторяем
+        if (!empty($dbOrder->waybill)) {
+            return;
+        }
+
+        // 7) Добавляем waybill к отгрузке(ам) в МС и отмечаем
+        $orderInfo = $moysklad->checkOrderInMoySkladByMarketplaceCode($kaspiOrderCode);
+
+        if (!empty($orderInfo)) {
+            foreach ($orderInfo as $iorder) {
+                $demandsList = $iorder->demands ?? [];
+                foreach ($demandsList as $demand) {
+                    $href = $demand->meta->href ?? null;
+                    if (!$href) continue;
+
+                    $demandId = explode('/', $href);
+                    $demandId = end($demandId);
+
+                    $moysklad->setFileToDemand($demandId, $waybillLink);
+                    $moysklad->markWaybillDelivery($demandId);
+                }
+            }
+        }
+
+        // 8) Сохраняем ссылку в БД через модель
+        $dbOrder->saveWaybill($waybillLink);
+
+        $telegram->sendTelegramMessage(
+            'Заказ Kaspi #' . $order->kaspiOrderId . ' (' . $order->shopId . ') - накладная успешно добавлена!',
+            'kaspi'
+        );
+        break;
+    }
+
+  }
 }
- 

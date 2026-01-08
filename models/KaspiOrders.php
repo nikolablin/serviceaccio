@@ -47,4 +47,20 @@ class KaspiOrders extends ActiveRecord
         return true;
     }
 
+    public function findByCode(string $code): ?self
+    {
+        return self::find()->where(['order_code' => $code])->limit(1)->one();
+    }
+
+    public function updateStatus(string $status): bool
+    {
+        $this->status = $status;
+        return $this->save(false, ['status', 'updated_at']);
+    }
+
+    public function saveWaybill(string $waybillLink): bool
+    {
+        $this->waybill = $waybillLink;
+        return $this->save(false, ['waybill', 'updated_at']);
+    }
 }
