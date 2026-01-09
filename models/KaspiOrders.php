@@ -3,6 +3,8 @@ namespace app\models;
 
 use yii\db\ActiveRecord;
 
+include_once(__DIR__ . '/../../../bot.accio.kz/html/models/DbDriver.php');
+
 class KaspiOrders extends ActiveRecord
 {
     public static function tableName()

@@ -344,9 +344,9 @@ class CronController extends Controller
         $orders12 = $kaspi->getKaspiOrders($shopkey,'DELIVERY','CANCELLING','-10 hours');
         $ordersAll= array_merge($orders1->data,$orders2->data,$orders3->data,$orders4->data,$orders5->data,$orders6->data,$orders7->data,$orders8->data,$orders9->data,$orders10->data,$orders11->data,$orders12->data);
 
-        file_put_contents(__DIR__ . '/../logs/kaspi/kaspiCancelledOrders.txt', date('d.m.Y H:i') . PHP_EOL . print_r($ordersAll,true) . PHP_EOL . PHP_EOL,FILE_APPEND);
-
         foreach ($ordersAll as $order) {
+
+          file_put_contents(__DIR__ . '/../logs/kaspi/kaspiCancelledOrders.txt', date('d.m.Y H:i') . PHP_EOL . print_r($order->attributes->code,true) . PHP_EOL . PHP_EOL,FILE_APPEND);
 
           if($order->attributes->status == 'CANCELLED'){} else { continue; }
 
@@ -385,7 +385,7 @@ class CronController extends Controller
                   if($setTgMessage){
                     $tgMessage = 'Требуется оформить возврат для заказа Каспи #' . $order->attributes->code . PHP_EOL;
                     $tgMessage .= 'Тип возврата - ' . $returnType . PHP_EOL;
-                    $tgMessage .= 'Магазин Каспи - ' . $shopid;
+                    $tgMessage .= 'Магазин Каспи - ' . $shopkey;
 
                     $telegram->sendTelegramMessage($tgMessage, 'cancelled');
                   }

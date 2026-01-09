@@ -269,17 +269,14 @@ class CashRegister extends Model
         // ✅ real send
         $res = self::ukassaPostJson($url, $payload, $headers, false);
 
-        print('<pre>');
-        print_r($res);
-        print('</pre>');
-
-        echo '<br/><br/>----------------<br/><br/>';
-
-        $receipt->response_json = $res['raw'] ?: null;
-        $receipt->ukassa_status = $res['ok'] ? 'sent' : 'error';
-        $receipt->error_text    = $res['ok'] ? null : ("http={$res['code']} err={$res['err']}");
-        $receipt->printed_at    = $res['ok'] ? date('Y-m-d H:i:s') : null;
-        $receipt->updated_at    = date('Y-m-d H:i:s');
+        $receipt->response_json         = $res['raw'] ?: null;
+        $receipt->ukassa_receipt_id     = $res['ok'] ? $res['json']['data']['id'] : null;
+        $receipt->ukassa_ticket_number  = $res['ok'] ? $res['json']['data']['fixed_check'] : null;
+        $receipt->total_amount          = $res['ok'] ? $res['json']['data']['total_amount'] : 0;
+        $receipt->ukassa_status         = $res['ok'] ? 'sent' : 'error';
+        $receipt->error_text            = $res['ok'] ? null : ("http={$res['code']} err={$res['err']}");
+        $receipt->printed_at            = $res['ok'] ? date('Y-m-d H:i:s') : null;
+        $receipt->updated_at            = date('Y-m-d H:i:s');
         $receipt->save(false);
 
         $res['receipt_id'] = $receiptId;
@@ -435,29 +432,25 @@ class CashRegister extends Model
      * ADDONS
      * ========================================================= */
 
-     public static function getDepartmentData($cashboxNum)
-     {
-       $cashboxId = self::getCashboxIdByRegister($cashboxNum);
-       $token     = self::getUkassaTokenByCashRegister($cashboxNum);
-       $url       = self::ukassaUrl('departmentPath', '/api/department/');
+    public static function getDepartmentData($cashboxNum)
+    {
+     $cashboxId = self::getCashboxIdByRegister($cashboxNum);
+     $token     = self::getUkassaTokenByCashRegister($cashboxNum);
+     $url       = self::ukassaUrl('departmentPath', '/api/department/');
 
-       $res = self::ukassaGetJson(
-          $url,
-          [
-              'Authorization: Token ' . $token,
-              'Content-Type: application/json'
-          ],
-          true // если нужны response headers
-      );
+     $res = self::ukassaGetJson(
+        $url,
+        [
+            'Authorization: Token ' . $token,
+            'Content-Type: application/json'
+        ],
+        true // если нужны response headers
+    );
 
-      print('<pre>');
-      print_r($res);
-      print('</pre>');
-
-      if (!$res['ok']) {
-          throw new \RuntimeException(
-              "UKassa GET failed http={$res['code']} err={$res['err']} body={$res['raw']}"
-          );
-      }
-     }
+    if (!$res['ok']) {
+        throw new \RuntimeException(
+            "UKassa GET failed http={$res['code']} err={$res['err']} body={$res['raw']}"
+        );
+    }
+    }
 }

@@ -98,7 +98,7 @@ class OrdersProducts extends ActiveRecord
     public static function syncFromMsDemand(int $orderId, object $demand): void
     {
         static::deleteAll(['order_id' => $orderId]);
-file_put_contents(__DIR__ . '/../logs/ms_service/test.txt',print_r($demand,true),FILE_APPEND);
+
         $rows = $demand->positions->rows ?? [];
         if (empty($rows)) {
             return;

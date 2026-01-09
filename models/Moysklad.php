@@ -2628,9 +2628,11 @@ class Moysklad extends Model
       curl_setopt_array($ch, [
           CURLOPT_RETURNTRANSFER => true,
           CURLOPT_CUSTOMREQUEST  => 'PUT',
+          CURLOPT_ENCODING       => 'gzip',
           CURLOPT_POSTFIELDS     => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
           CURLOPT_HTTPHEADER     => [
               'Authorization: Basic ' . base64_encode($access->login . ':' . $access->password),
+              'Accept-Encoding: gzip',
               'Content-Type: application/json',
           ],
       ]);
