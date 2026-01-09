@@ -186,16 +186,16 @@ class CronController extends Controller
                   switch($order->attributes->deliveryMode){
                     case 'DELIVERY_LOCAL':
                       if($order->attributes->kaspiDelivery->express){
-                        $creatingOrder->deliveryType = '90b239fc-8c74-11eb-0a80-03dd0005a26d'; // Kaspi Delivery
+                        $creatingOrder->deliveryType = $projectConfig->delivery_service; // Kaspi Delivery
                       }
                       else {
-                        $creatingOrder->deliveryType = $projectConfig->delivery_service;
+                        $creatingOrder->deliveryType = '7f6acbef-b4ee-11ed-0a80-005b003d9e76';
                       }
                       break;
                     case 'DELIVERY_PICKUP':
                     case 'DELIVERY_REGIONAL_PICKUP':
                     case 'DELIVERY_REGIONAL_TODOOR':
-                      $creatingOrder->deliveryType = $projectConfig->delivery_service; // Zammler
+                      $creatingOrder->deliveryType = '7f6acbef-b4ee-11ed-0a80-005b003d9e76'; // Zammler
                       break;
                   }
                   break;
@@ -343,6 +343,8 @@ class CronController extends Controller
         $orders11 = $kaspi->getKaspiOrders($shopkey,'KASPI_DELIVERY','CANCELLING','-10 hours');
         $orders12 = $kaspi->getKaspiOrders($shopkey,'DELIVERY','CANCELLING','-10 hours');
         $ordersAll= array_merge($orders1->data,$orders2->data,$orders3->data,$orders4->data,$orders5->data,$orders6->data,$orders7->data,$orders8->data,$orders9->data,$orders10->data,$orders11->data,$orders12->data);
+
+        file_put_contents(__DIR__ . '/../logs/kaspi/kaspiCancelledOrders.txt', date('d.m.Y H:i') . PHP_EOL . print_r($ordersAll,true) . PHP_EOL . PHP_EOL,FILE_APPEND);
 
         foreach ($ordersAll as $order) {
 

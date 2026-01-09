@@ -69,6 +69,7 @@ class CustomerOrderUpdateHandler
          * 4️⃣ Обновляем заказ в МС по конфигу (если нужно), убираем статус
          */
         unset($configData['status']);
+        unset($configData['delivery_service']);
         $updated = $moysklad->updateOrderWithConfig($order->id, $configData);
         if ($updated && !empty($updated->id)) {
             $ph = $updated->positions->meta->href ?? null;
@@ -194,32 +195,76 @@ class CustomerOrderUpdateHandler
 
         if ($stateId && in_array($stateId, $allowStates, true)) {
 
-            $skip = false;
-            if (
-                $link &&
-                !empty($link->block_demand_until) &&
-                strtotime($link->block_demand_until) > time()
-            ) {
-                $skip = true;
-            }
+            // 0) Быстрая проверка: если уже есть связь — это update ветка, а не create
+            $link = OrdersDemands::findOne(['moysklad_order_id' => (string)$order->id]);
 
-            if (!$skip) {
-                $demand = $moysklad->upsertDemandFromOrder(
-                    $order,
-                    $orderId,
-                    $configData,
-                    [
-                        'sync_positions' => true,
-                    ]
-                );
-                file_put_contents(__DIR__ . '/../logs/ms_service/updatecustomerorder.txt',print_r($demand,true) . PHP_EOL, FILE_APPEND);
-                if ($link) {
-                    $link->block_demand_until = date('Y-m-d H:i:s', time() + 10);
-                    $link->updated_at = date('Y-m-d H:i:s');
-                    $link->save(false);
+            // если связь есть и не пустой moysklad_demand_id — можно спокойно sync/update
+            if ($link && !empty($link->moysklad_demand_id)) {
+
+                // optional: loop-guard
+                if (!empty($link->block_demand_until) && strtotime($link->block_demand_until) > time()) {
+                    return;
                 }
+
+                $demand = $moysklad->upsertDemandFromOrder($order, $orderId, $configData, ['sync_positions' => true]);
+
+                $link->block_demand_until = date('Y-m-d H:i:s', time() + 10);
+                $link->updated_at = date('Y-m-d H:i:s');
+                $link->save(false);
+
+            }
+            else {
+                /**
+                 * 1) 🔐 RESERVE локально ДО МС
+                 *    Если второй поток попытается сделать то же — упадёт по UNIQUE( order_id ) и выйдет.
+                 */
+                $reserve = new OrdersDemands();
+                $reserve->order_id          = (int)$orderId;
+                $reserve->moysklad_order_id = (string)$order->id;
+
+                // важно для NOT NULL полей
+                $reserve->moysklad_demand_id = '';      // placeholder
+                $reserve->moysklad_state_id  = null;
+
+                // loop-guard на время создания
+                $reserve->block_demand_until = date('Y-m-d H:i:s', time() + 30);
+
+                $reserve->created_at = date('Y-m-d H:i:s');
+                $reserve->updated_at = date('Y-m-d H:i:s');
+
+                try {
+                    $reserve->save(false); // тут сработает uk_order_id и второй поток вылетит
+                } catch (\Throwable $e) {
+                    file_put_contents(__DIR__ . '/../logs/ms_service/updatecustomerorder.txt',
+                        "DEMAND RESERVE FAIL order={$order->id} msg={$e->getMessage()}\n",
+                        FILE_APPEND
+                    );
+                    return; // критично: выходим ДО вызова МС
+                }
+
+                /**
+                 * 2) Теперь можно идти в МС и создавать/апдейтить demand
+                 */
+                $demand = $moysklad->upsertDemandFromOrder($order, $orderId, $configData, ['sync_positions' => true]);
+
+                // если создание в МС не удалось — оставляем “резерв” (видно, что попытка была)
+                if (!$demand || empty($demand->id)) {
+                    file_put_contents(__DIR__ . '/../logs/ms_service/updatecustomerorder.txt',
+                        "DEMAND CREATE FAIL order={$order->id}\n",
+                        FILE_APPEND
+                    );
+                    return;
+                }
+
+                /**
+                 * 3) Финализируем резерв: записываем реальный demand_id
+                 */
+                $reserve->moysklad_demand_id = (string)$demand->id;
+                $reserve->updated_at         = date('Y-m-d H:i:s');
+                $reserve->save(false);
             }
         }
+
 
         /**
          * 8️⃣ СИНК СТАТУСА ОТГРУЗКИ (ORDER → DEMAND)

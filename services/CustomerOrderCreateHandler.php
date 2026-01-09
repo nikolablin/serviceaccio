@@ -87,11 +87,11 @@ class CustomerOrderCreateHandler
        * Проверяем заказы Каспи. Так как они приходят из системы, то им автоматически назначается статус Подтвержден - К отправке
        * Исключением является недостаточность товара на складе, тогда заказу автоматически присваивается заказ Взять в работу.
        * И автоматически переопрделять его не нужно.
+       * Также переопрделять службу доставки не нужно
        */
        if(in_array($projectId,Yii::$app->params['moysklad']['kaspiProjects'])){
-         if($stateId == Yii::$app->params['moysklad']['takeToJobOrderState']){
-           unset($configData->status);
-         }
+         unset($configData->status);
+         $configData->delivery_service = $moysklad->getAttributeValueId($order,'8a307d43-3b6a-11ee-0a80-06ae000fd467');
        }
 
         $updated = $moysklad->updateOrderWithConfig($order->id, $configData);

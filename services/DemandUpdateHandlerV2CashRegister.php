@@ -181,8 +181,6 @@ class DemandUpdateHandler
                         $items = [];
                         $totalSum = 0;
 
-                        $cashboxId = CashRegister::getCashboxIdByRegister($cashRegisterCode);
-                        $sectionId = CashRegister::getSectionIdByRegister($cashRegisterCode);
                         foreach (($demand->positions->rows ?? []) as $pos) {
                             $a = $pos->assortment ?? null;
 
@@ -196,36 +194,36 @@ class DemandUpdateHandler
                             $ntin = $moysklad->getProductAttribute($a->attributes,'594f2460-e4af-11f0-0a80-192e0037459c');
                             $ntin = (!$ntin) ? '-' : $ntin->value;
 
-                            $lineTotal = $qty * $unit;
                             $totalSum += $qty * $unit;
 
                             $items[] = [
-                                'name'     => $name,
-                                'price'    => $unit,
-                                'total_amount' => $lineTotal,
-                                'quantity' => $qty,
-                                'is_nds'   => true,
-                                'section'  => $sectionId,
+                                'is_storno'    => false,
+                                'code'         => $code,
+                                'name'         => $name,
+                                'quantity'     => max(1, $qty),
+                                'unit_price'   => max(0, $unit),
+                                'ntin'         => $ntin,
+                                'tax_rate'     => Yii::$app->params['ukassa']['taxRate'],
+                                'section_code' => '0',
+                                'total_amount' => $qty * $unit,
                             ];
                         }
 
                         $dataReceipt = [
-                            'operation'    => YII::$app->params['ukassa']['operationTypeSell'],       // 'sell' / 'sell_return' (для возврата)
-                            'kassa'        => (int)$cashboxId,
-                            'payments'     => [
+                            'operation_type'  => (int)Yii::$app->params['ukassa']['operationTypeSell'],
+                            'items'           => $items,
+                            'payments'        => [
                                 [
-                                    'payment_type'  => 1,   // 'cash' | 'card' | ...
-                                    'total'         => $totalSum,
-                                    'amount'        => $totalSum
+                                    'type' => 1,        // Картой (потом можно определить от paymentType)
+                                    'sum_' => $totalSum
                                 ]
                             ],
-                            'items'        => $items,
-                            'total_amount' => $totalSum,
-                            'as_html' => false
+                            'is_return_html' => false,
                         ];
 
                         // 4) Если чек уже есть — обновляем его запись, если нет — создаём черновик
                         if ($existingReceiptId) {
+
                             /** @var OrdersReceipts $receipt */
                             $receipt = OrdersReceipts::findOne((int)$existingReceiptId);
 
@@ -251,7 +249,7 @@ class DemandUpdateHandler
                                 'moysklad_order_id'   => (string)($msOrder->id ?? ''),
                                 'moysklad_demand_id'  => (string)($demand->id ?? ''),
                                 'receipt_type'        => 'sale',
-                                'idempotency_key'     => CashRegister::uuidV4()
+                                'idempotency_key'     => 'demand_' . (string)$demand->id, // оставляем стабильным
                             ];
 
                             $receiptId = CashRegister::createReceiptDraft($cashRegisterCode, $metaReceipt, $dataReceipt);
@@ -266,22 +264,6 @@ class DemandUpdateHandler
                             "RESULT=" . print_r($sent, true) . "\n----\n",
                             FILE_APPEND
                         );
-
-                        $receiptLink = $sent['json']['data']['link'] ?? null;
-
-                        if (!$receiptLink) {
-                            file_put_contents(
-                                __DIR__ . '/../logs/ms_service/ukassa_receipt.txt',
-                                "NO RECEIPT LINK receipt_id={$receiptId}\n" .
-                                print_r($sent['json'], true) . "\n----\n",
-                                FILE_APPEND
-                            );
-                        }
-                        else {
-                          $attrs = $moysklad->buildDemandAttributePayload( '1ff6c2e8-1c3a-11ec-0a80-06650003408f', $receiptLink );
-                          $moysklad->updateDemandAttributes((string)$demand->id, $attrs);
-                        }
-
                     }
                 }
 

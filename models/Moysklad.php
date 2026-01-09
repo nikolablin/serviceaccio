@@ -1662,10 +1662,14 @@ class Moysklad extends Model
 
       $payload = $this->buildDemandPayloadFromOrder($msorder, $config, $options);
 
+      file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt','PAYLOAD:::' . print_r($payload,true) . PHP_EOL, FILE_APPEND);
+
       // 1) проверяем, есть ли demand уже
       $link = OrdersDemands::findOne(['moysklad_order_id' => (string)$msorder->id]);
 
-      if ($link) {
+      file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt','LINK:::' . print_r($link,true) . PHP_EOL, FILE_APPEND);
+
+      if ($link && !empty($link->moysklad_demand_id)) {
           // UPDATE demand
           $demandId = $link->moysklad_demand_id;
 
@@ -1733,7 +1737,7 @@ class Moysklad extends Model
       $code  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
       curl_close($ch);
 
-      file_put_contents(__DIR__ . '/../logs/ms_service/updatecustomerorder.txt',print_r($response,true) . PHP_EOL, FILE_APPEND);
+      file_put_contents(__DIR__ . '/../logs/ms_service/updatecustomerorder.txt','RESPONSE::' . print_r($response,true) . PHP_EOL, FILE_APPEND);
 
       if ($errNo || $code < 200 || $code >= 300) {
           file_put_contents(__DIR__ . '/../logs/ms_service/createcustomerorder.txt',
@@ -1755,7 +1759,9 @@ class Moysklad extends Model
       }
 
       // 3) сохраняем связь в БД
-      $link = new OrdersDemands();
+      if(!$link){
+        $link = new OrdersDemands();
+      }
       $link->order_id           = $localOrderId;
       $link->moysklad_order_id  = (string)$msorder->id;
       $link->moysklad_demand_id = (string)$demandId;
@@ -2607,4 +2613,57 @@ class Moysklad extends Model
 
       return $this->requestJson('POST', $url, $payload);
   }
+
+  public function updateDemandAttributes(string $demandId, array $attributes): bool
+  {
+      $access = self::getMSLoginPassword();
+
+      $url = 'https://api.moysklad.ru/api/remap/1.2/entity/demand/' . $demandId;
+
+      $payload = [
+          'attributes' => $attributes,
+      ];
+
+      $ch = curl_init($url);
+      curl_setopt_array($ch, [
+          CURLOPT_RETURNTRANSFER => true,
+          CURLOPT_CUSTOMREQUEST  => 'PUT',
+          CURLOPT_POSTFIELDS     => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+          CURLOPT_HTTPHEADER     => [
+              'Authorization: Basic ' . base64_encode($access->login . ':' . $access->password),
+              'Content-Type: application/json',
+          ],
+      ]);
+
+      $resp = curl_exec($ch);
+      $err  = curl_error($ch);
+      $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+      curl_close($ch);
+
+      if ($err || $code < 200 || $code >= 300) {
+          file_put_contents(
+              __DIR__ . '/../logs/ms_service/updatedemand.txt',
+              "DEMAND ATTR UPDATE FAIL demand={$demandId} http={$code} err={$err} resp={$resp}\n",
+              FILE_APPEND
+          );
+          return false;
+      }
+
+      return true;
+  }
+
+  public function buildDemandAttributePayload(string $attributeId, $value): array
+  {
+      return [
+          [
+              'meta' => [
+                  'href' => 'https://api.moysklad.ru/api/remap/1.2/entity/demand/metadata/attributes/' . $attributeId,
+                  'type' => 'attributemetadata',
+                  'mediaType' => 'application/json',
+              ],
+              'value' => $value,
+          ],
+      ];
+  }
+
 }

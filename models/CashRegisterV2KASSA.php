@@ -93,14 +93,6 @@ class CashRegister extends Model
         return is_string($token) && $token !== '' ? $token : null;
     }
 
-    public static function uuidV4(): string
-    {
-        $data = random_bytes(16);
-        $data[6] = chr((ord($data[6]) & 0x0f) | 0x40); // version 4
-        $data[8] = chr((ord($data[8]) & 0x3f) | 0x80); // variant
-        return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
-    }
-
     public static function loginUkassaUser(string $mail, string $password, string $hashline): array
     {
         $cfg  = Yii::$app->params['ukassa'] ?? [];
@@ -134,48 +126,78 @@ class CashRegister extends Model
         return (int)$cfg[$cashRegisterCode];
     }
 
-    public static function getSectionIdByRegister(string $cashRegisterCode): int
+    /* =========================================================
+     * RECEIPT PAYLOAD
+     * ========================================================= */
+
+    public static function buildReceiptPayload(string $cashRegisterCode, array $data): array
     {
-        $cfg = Yii::$app->params['ukassa']['sections'] ?? [];
-        if (empty($cfg[$cashRegisterCode])) {
-            throw new \RuntimeException("cashbox_id not configured for cash_register={$cashRegisterCode}");
+        $cashboxId = self::getCashboxIdByRegister($cashRegisterCode);
+        if ($cashboxId <= 0) {
+            throw new \RuntimeException('cashbox_id is required');
         }
-        return (int)$cfg[$cashRegisterCode];
+
+        $items = (array)($data['items'] ?? []);
+        if (!$items) throw new \RuntimeException('items is required');
+
+        $payments = (array)($data['payments'] ?? []);
+        if (!$payments) throw new \RuntimeException('payments is required');
+
+        $total = 0;
+        foreach ($items as $i => $it) {
+            $qty  = (int)($it['quantity'] ?? 0);
+            $unit = (int)($it['unit_price'] ?? 0);
+            $line = (int)($it['total_amount'] ?? ($qty * $unit));
+
+            $items[$i]['total_amount'] = $line;
+            $total += $line;
+        }
+
+        $taken = 0;
+        foreach ($payments as $p) $taken += (int)($p['sum_'] ?? 0);
+
+        if ($taken <= 0) {
+            $taken = $total;
+            $payments = [['type' => 0, 'sum_' => $total]];
+        }
+
+        $payload = [
+            'operation_type' => (int)($data['operation_type'] ?? 2),
+            'cashbox_id'     => $cashboxId,
+            'items'          => array_values($items),
+            'payments'       => array_values($payments),
+            'amounts'        => [
+                'total'    => $total,
+                'taken'    => $taken,
+                'change'   => max(0, $taken - $total),
+                'markup'   => 0,
+                'discount' => 0,
+            ],
+            'is_return_html' => (bool)($data['is_return_html'] ?? false),
+        ];
+
+        $iin = trim((string)($data['customer_iin_bin'] ?? ''));
+        if ($iin !== '') {
+            $payload['customer_info'] = ['iin_or_bin' => $iin];
+        }
+
+        return $payload;
     }
 
     /* =========================================================
      * DRAFT (DB)
      * ========================================================= */
 
-    public static function createReceiptDraft(
-       string $cashRegisterCode,
-       array $meta,
-       array $payload
-    ): int
+    public static function createReceiptDraft(string $cashRegisterCode, array $meta, array $data): int
     {
-       if (empty($payload['operation'])) {
-           throw new \RuntimeException('operation is required');
-       }
-       if (empty($payload['kassa'])) {
-           $payload['kassa'] = $cashRegisterCode;
-       }
-       if (empty($payload['items'])) {
-           throw new \RuntimeException('items is required');
-       }
-       if (empty($payload['payments'])) {
-           throw new \RuntimeException('payments is required');
-       }
-       if (!isset($payload['total_amount'])) {
-           throw new \RuntimeException('total_amount is required');
-       }
+        $payload = self::buildReceiptPayload($cashRegisterCode, $data);
 
-       $meta['cash_register'] = $cashRegisterCode;
+        $meta['cash_register'] = $cashRegisterCode;
+        if (empty($meta['idempotency_key'])) {
+            $meta['idempotency_key'] = 'r_' . bin2hex(random_bytes(16));
+        }
 
-       if (empty($meta['idempotency_key'])) {
-           $meta['idempotency_key'] = 'r_' . bin2hex(random_bytes(16));
-       }
-
-       return self::saveReceiptDraft($meta, $payload);
+        return self::saveReceiptDraft($meta, $payload);
     }
 
     public static function saveReceiptDraft(array $meta, array $payload): int
@@ -192,6 +214,8 @@ class CashRegister extends Model
         }
 
         $now = date('Y-m-d H:i:s');
+        $totalAmount = (float)($payload['amounts']['total'] ?? 0);
+        if ($totalAmount <= 0) throw new \RuntimeException('Receipt total_amount must be > 0');
 
         $row = new OrdersReceipts();
 
@@ -202,6 +226,9 @@ class CashRegister extends Model
         $row->cash_register   = (string)($meta['cash_register'] ?? '');
         $row->receipt_type    = (string)($meta['receipt_type'] ?? 'sale'); // sale|return
         $row->idempotency_key = $idempotencyKey;
+
+        $row->total_amount = $totalAmount;
+        $row->currency     = 'KZT';
 
         $row->ukassa_receipt_id    = null;
         $row->ukassa_ticket_number = null;
@@ -242,8 +269,8 @@ class CashRegister extends Model
         $token = self::getUkassaTokenByCashRegister($receipt->cash_register);
 
         $headers = [
-            'Authorization: Token ' . $token,
-            'IDEMPOTENCY-KEY: ' . $receipt->idempotency_key,
+            'Authorization: ' . $token,
+            'Idempotency-Key: ' . $receipt->idempotency_key,
             'Accept: application/json',
             'Content-Type: application/json',
         ];
@@ -268,13 +295,6 @@ class CashRegister extends Model
 
         // ✅ real send
         $res = self::ukassaPostJson($url, $payload, $headers, false);
-
-        print('<pre>');
-        print_r($res);
-        print('</pre>');
-
-        echo '<br/><br/>----------------<br/><br/>';
-
         $receipt->response_json = $res['raw'] ?: null;
         $receipt->ukassa_status = $res['ok'] ? 'sent' : 'error';
         $receipt->error_text    = $res['ok'] ? null : ("http={$res['code']} err={$res['err']}");
@@ -439,12 +459,12 @@ class CashRegister extends Model
      {
        $cashboxId = self::getCashboxIdByRegister($cashboxNum);
        $token     = self::getUkassaTokenByCashRegister($cashboxNum);
-       $url       = self::ukassaUrl('departmentPath', '/api/department/');
+       $url       = self::ukassaUrl('departmentPath', '/api/v1/company/department/cashbox/'.$cashboxId.'/');
 
        $res = self::ukassaGetJson(
           $url,
           [
-              'Authorization: Token ' . $token,
+              'Authorization: ' . $token,
               'Content-Type: application/json'
           ],
           true // если нужны response headers

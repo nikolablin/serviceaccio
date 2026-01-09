@@ -139,7 +139,7 @@ class Kaspi extends Model
     $data->data->attributes         = (object)array();
     $data->data->attributes->status = $orderStatus;
 
-    file_put_contents(__DIR__ . '/../logs/kaspi/kaspiChangeStatusOrders.txt', date('d.m.Y') . PHP_EOL . $token . PHP_EOL . print_r($data,true) . PHP_EOL,FILE_APPEND);
+    file_put_contents(__DIR__ . '/../logs/kaspi/kaspiChangeStatusOrders.txt', date('d.m.Y H:i') . PHP_EOL . $token . PHP_EOL . print_r($data,true) . PHP_EOL,FILE_APPEND);
 
     switch($orderStatus){
       case 'ACCEPTED_BY_MERCHANT':

@@ -9,7 +9,8 @@ return [
     'ukassa' => [
       'baseUrl'    => 'https://ukassa.kz',
       'loginPath'  => '/api/auth/login/',
-      'receiptPath'=> '/api/v1/ofd/receipt/',
+      'receiptPath'=> '/api/v2/operation/ticket/',
+      // 'receiptPath'=> '/api/v1/ofd/receipt/',
       'hashline' => 'serviceaccio',           // любой стабильный идентификатор устройства
       'taxRate' => 16,
       'tokenCacheTtl' => 60 * 60 * 12,
@@ -27,6 +28,14 @@ return [
           'UK00003854' => 3880,
           'UK00006240' => 6548,
           'UK00006241' => 6549,
+      ],
+      'sections' => [
+          'UK00003842' => 3682,
+          'UK00003857' => 3673,
+          'UK00003827' => 3853,
+          'UK00003854' => 3694,
+          'UK00006240' => 6373,
+          'UK00006241' => 6374,
       ],
       'operationTypeReturn' => 3,
       'operationTypeSell'   => 2

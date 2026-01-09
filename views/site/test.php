@@ -1,88 +1,74 @@
 <?php
-// use app\models\CashRegister;
-//
-// ini_set('display_errors', '1');
-// error_reporting(E_ALL);
+use app\models\CashRegister;
 
-// CashRegister::getDepartmentData('UK00003857');
+ini_set('display_errors', '1');
+error_reporting(E_ALL);
+
+// CashRegister::getDepartmentData('UK00006241');
 
 // 1) Данные для чека (упрощённо)
-// $data = [
-//     'operation_type' => 2, // продажа (как у тебя)
+// $dataReceipt = [
+//     // тип операции
+//     // sell | sell_return
+//     'operation' => 2,
+//
+//     // код кассы (как в конфиге, НЕ id)
+//     'kassa' => 3868,
+//
+//     // позиции чека
 //     'items' => [
 //         [
-//             'code' => 'TEST-0001',
-//             'name' => 'Тестовый товар',
-//             'quantity' => 1,
-//             'unit_price' => 1000,
-//             'tax_rate' => 12,
-//             'section_code' => '1488',
-//             'measure_unit_code' => '796',
+//             'name'     => 'Товар',
+//             'price'     => 4899,     // цена за единицу (в тиынах)
+//             'quantity'  => 1,
+//             'is_nds'    => true,       // есть НДС
+//             'section'   => 3682,          // секция кассы
+//             'ntin'      => '123456789012', // ИНТ/GTIN (можно '-')
+//             'tax_rate'  => 12,         // ставка НДС
+//             'total_amount' => 4899
 //         ],
 //     ],
+//
+//     // оплата
 //     'payments' => [
-//         ['type' => 0, 'sum_' => 1000], // наличные/карта зависит от ukassa типа (тут как в доке)
+//         [
+//             'payment_type' => 1, // card | cash | mixed
+//             'total'        => 4899, // сумма оплаты
+//         ],
 //     ],
-//     // 'customer_iin_bin' => '910228451318', // опционально
+//
+//     // итог по чеку
+//     'total_amount' => 4899,
+//
+//     // опционально
 //     'is_return_html' => false,
 // ];
 //
-// // 2) Метаданные для БД (если нет order/demand — можно null/пусто)
-// $meta = [
-//     'order_id' => null,
-//     'moysklad_order_id' => 'null9',
-//     'moysklad_demand_id' => 'null9',
-//     'receipt_type' => 'sale', // sale|return
-//     // idempotency_key можно не задавать — сгенерится
+// $metaReceipt = [
+//     'order_id'           => 123,
+//     'moysklad_order_id'  => 'f51412fa-ed48-11f0-0a80-0d9001c70105',
+//     'moysklad_demand_id' => '7e231cdd-ed3e-11f0-0a80-01ba01c2b1f0',
+//     'receipt_type'       => 'sale',
+//     'idempotency_key'    => CashRegister::uuidV4(),
 // ];
 //
-// // 3) Создаём черновик в БД
-// $receiptId = CashRegister::createReceiptDraft('UK00003842', $meta, $data);
+// $receiptId = CashRegister::createReceiptDraft(
+//     'UK00003842',
+//     $metaReceipt,
+//     $dataReceipt
+// );
 //
-// echo "DRAFT CREATED receipt_id={$receiptId}\n";
-//
-// // 4) DryRun: тормозим перед отправкой (ничего в ukassa не уйдёт)
-// $res = CashRegister::sendReceiptById($receiptId, true);
-//
-// echo "\n=== DRY RUN RESULT ===\n";
-// echo "URL: " . $res['url'] . "\n";
-// echo "HEADERS:\n" . implode("\n", $res['headers']) . "\n";
-// echo "\nPAYLOAD:\n";
 // print('<pre>');
-// print_r($res['payload']);
+// print_r($receiptId);
+// print('</pre>');
+//
+// $sent = CashRegister::sendReceiptById((int)$receiptId, false);
+//
+// print('<pre>');
+// print_r($sent);
 // print('</pre>');
 
-// $payload = CashRegister::buildTestReceiptPayload('UK00006241',[
-//     'operation_type' => 2,
-//     'items' => [
-//         [
-//             'code' => '00000000067',
-//             'name' => 'Хлеб/Нан',
-//             'quantity' => 1,
-//             'unit_price' => 555,
-//             'tax_rate' => 12,
-//             'section_code' => '1488',
-//             'ntin' => '48743587',
-//             'measure_unit_code' => '796',
-//         ],
-//     ],
-//     'payments' => [
-//         ['type' => 0, 'sum_' => 555],
-//     ],
-//     'customer_iin_bin' => '910228451318',
-// ]);
-//
-// $receiptId = CashRegister::saveReceiptDraft([
-//     'order_id' => 123,
-//     'moysklad_order_id' => 'ms-order-id1',
-//     'moysklad_demand_id' => 'ms-demand-id1',
-//     'cash_register' => 'UK00006241',
-//     'receipt_type' => 'sale',
-//     'idempotency_key' => 'draft-' . uniqid('', true),
-// ], $payload);
-//
-// echo "Receipt draft saved: id={$receiptId}\n";
-
+//// ---------------------------------------
 
 
 // foreach (CashRegister::getCashRegisterList() as $code) {
