@@ -1,0 +1,95 @@
+{
+  "data": [
+    {
+      "id": "NzgwMTg0NTA3",
+      "type": "orders",
+      "attributes": {
+        "code": "780184507test",
+        "plannedDeliveryDate": 1768399200000,
+        "creationDate": 1767887165670,
+        "totalPrice": 10400,
+        "deliveryCostForSeller": 0,
+        "isKaspiDelivery": 1,
+        "preOrder": null,
+        "approvedByBankDate": 1767887166280,
+        "signatureRequired": null,
+        "status": "APPROVED_BY_BANK",
+        "pickupPointId": "Accio_PP1",
+        "state": "NEW",
+        "deliveryCost": 0,
+        "customer": {
+          "id": "NzA3NTY3ODg3OA",
+          "name": "Тогжан",
+          "cellPhone": "7075678878",
+          "firstName": "Тогжан",
+          "lastName": "Т"
+        },
+        "originAddress": {
+          "id": "QWNjaW9fUFAx",
+          "displayName": "PP1",
+          "address": {
+            "streetName": "проспект Абая",
+            "streetNumber": " 20/5",
+            "town": "г. Алматы",
+            "district": null,
+            "building": "Цокольный этаж, магазин Accio",
+            "apartment": null,
+            "formattedAddress": "г. Алматы, проспект Абая,  20/5 (Цокольный этаж, магазин Accio)",
+            "latitude": 43.239185333252,
+            "longitude": 76.943023681641
+          },
+          "city": {
+            "id": "NzUwMDAwMDAw",
+            "code": "750000000",
+            "name": "Алматы",
+            "active": 1
+          }
+        },
+        "kaspiDelivery": {
+          "waybill": null,
+          "courierTransmissionDate": null,
+          "courierTransmissionPlanningDate": 1767970800000,
+          "waybillNumber": null,
+          "express": null,
+          "returnedToWarehouse": null,
+          "firstMileCourier": null
+        },
+        "assembled": null,
+        "deliveryMode": "DELIVERY_PICKUP",
+        "paymentMode": "PREPAID"
+      },
+      "relationships": {
+        "entries": {
+          "data": [
+            {
+              "id": "NzgwMTg0NTA3IyMw",
+              "type": "orderentries"
+            }
+          ],
+          "links": {
+            "self": "https://kaspi.kz/shop/api/v2/orders/NzgwMTg0NTA3/relationships/entries",
+            "related": "https://kaspi.kz/shop/api/v2/orders/NzgwMTg0NTA3/entries"
+          }
+        },
+        "user": {
+          "data": {
+            "id": "NzA3NTY3ODg3OA",
+            "type": "customers"
+          },
+          "links": {
+            "self": "https://kaspi.kz/shop/api/v2/orders/NzgwMTg0NTA3/relationships/user",
+            "related": "https://kaspi.kz/shop/api/v2/orders/NzgwMTg0NTA3/user"
+          }
+        }
+      },
+      "links": {
+        "self": "https://kaspi.kz/shop/api/v2/orders/NzgwMTg0NTA3"
+      }
+    }
+  ],
+  "included": [],
+  "meta": {
+    "pageCount": 1,
+    "totalCount": 1
+  }
+}

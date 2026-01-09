@@ -9,6 +9,7 @@ use app\models\Kaspi;
 use app\models\Moysklad;
 use app\models\Website;
 use app\models\Telegram;
+use app\models\Whatsapp;
 use app\models\KaspiOrders;
 use app\models\OrdersConfigTable;
 
@@ -52,14 +53,17 @@ class CronController extends Controller
       $website      = new Website();
       $telegram     = new Telegram();
 
-      $kaspiShops = $kaspi->getKaspiShops();
+      $kaspiShops = Yii::$app->params['moysklad']['kaspiProjects'];
 
-      foreach ($kaspiShops as $shopid) {
+      foreach ($kaspiShops as $shopkey => $shopid) {
+        $projectConfig  = OrdersConfigTable::findOne(['project' => $shopid]);
 
-        $projectType    = $moysklad->getProjectByCode($shopid);
-        $projectConfig  = OrdersConfigTable::findOne(['project' => $projectType]);
+        $orders = $kaspi->getKaspiOrders($shopkey,'NEW');
 
-        $orders = $kaspi->getKaspiOrders($shopid,'NEW');
+        file_put_contents(__DIR__ . '/../logs/kaspi/kaspiCreateOrders.txt', date('d.m.Y H:i') . PHP_EOL . $shopkey . PHP_EOL . print_r($orders,true) . PHP_EOL . PHP_EOL,FILE_APPEND);
+
+        // $orders = file_get_contents(__DIR__ . '/kaspitest.json');
+        // $orders = json_decode($orders);
 
         if(!empty($orders->data)){
           $moySkladRemains  = $moysklad->getProductsRemains(); // 023870f6-ee91-11ea-0a80-05f20007444d - almaty, 805d5404-3797-11eb-0a80-01b1001ba27a - astana, 1e1187c1-85e6-11ed-0a80-0dbe006f385b - БЦ Success
@@ -75,32 +79,14 @@ class CronController extends Controller
               $creatingOrder                = (object)array();
 
               // PRODUCTS
-              $productsData                 = $kaspi->getKaspiOrderProducts($order->id,$shopid);
+              $productsData                 = $kaspi->getKaspiOrderProducts($order->id,$shopkey);
               $creatingOrder->products      = [];
               $creatingOrder->orderStatus   = $projectConfig->status;
               $creatingOrder->comment       = false;
               $orderPickupPointCity         = false;
 
               // PP names
-              $pointsNames = $kaspi->getPointsTitles($shopid);
-
-              // switch($shopid){
-              //   case 'accio':
-              //     $pp1name = 'Accio_PP1';
-              //     $pp2name = 'Accio_PP2';
-              //     $pp15name = 'Accio_PP15';
-              //     break;
-              //   case 'ItalFood':
-              //     $pp1name = '30093069_PP1';
-              //     $pp2name = '30093069_PP2';
-              //     $pp15name = '30093069_PP15';
-              //     break;
-              //   case 'kasta':
-              //     $pp1name = '30224658_PP1';
-              //     $pp2name = '30224658_PP2';
-              //     $pp15name = false;
-              //     break;
-              // }
+              $pointsNames = $kaspi->getPointsTitles($shopkey);
 
               switch ($order->attributes->pickupPointId){
                 case $pointsNames->pp1name:
@@ -115,7 +101,7 @@ class CronController extends Controller
               }
 
               foreach ($productsData->data as $prdata) {
-                $productInfo            = $kaspi->getKaspiLinkData('https://kaspi.kz/shop/api/v2/masterproducts/' . $prdata->relationships->product->data->id . '/merchantProduct',$shopid);
+                $productInfo            = $kaspi->getKaspiLinkData('https://kaspi.kz/shop/api/v2/masterproducts/' . $prdata->relationships->product->data->id . '/merchantProduct',$shopkey);
                 $productWebSiteData     = $website->getProductWebDataBySku($productInfo->data->attributes->code);
                 if($productWebSiteData){
                   $productRemainsInStock  = $moysklad->productRemainsCheckByArray($productInfo->data->attributes->code,$prdata->attributes->quantity,$moySkladRemains,$productWebSiteData->product_id);
@@ -123,7 +109,7 @@ class CronController extends Controller
                   foreach ($productRemainsInStock as $key => $remain) {
                     if($key == $orderPickupPointCity){
                       if($remain < $prdata->attributes->quantity){
-                        $creatingOrder->orderStatus = '02482aa0-ee91-11ea-0a80-05f20007446d'; // Если беда с количеством, то создаем со статусом - Взять в работу
+                        $creatingOrder->orderStatus = Yii::$app->params['moysklad']['takeToJobOrderState']; // Если беда с количеством, то создаем со статусом - Взять в работу !!! Нужно учесть этот момент при вебхуке создания заказа
                       }
                     }
                   }
@@ -143,7 +129,7 @@ class CronController extends Controller
                 }
                 else {
                   $addOrderToMoySklad = false;
-                  $telegram->sendTelegramMessage('Ошибка создания заказа Kaspi #' . $order->attributes->code . ' (' . $shopid . '). Не найден товар SKU - ' . $productInfo->data->attributes->code . '.', 'kaspi');
+                  $telegram->sendTelegramMessage('Ошибка создания заказа Kaspi #' . $order->attributes->code . ' (' . $shopkey . '). Не найден товар SKU - ' . $productInfo->data->attributes->code . '.', 'kaspi');
                 }
               }
 
@@ -162,21 +148,6 @@ class CronController extends Controller
               $creatingOrder->organization  = $projectConfig->organization;
               $creatingOrder->project       = $projectConfig->project;
               $creatingOrder->contragent    = $msContragent->id;
-
-              // switch($shopid){
-              //   case 'accio':
-              //     $creatingOrder->organization    = '1e0488ad-0a26-11ec-0a80-05760004991d'; // ИП СПЕКТОРГ
-              //     $creatingOrder->project         = '698bbf4d-7346-11eb-0a80-083400146e88'; // Kaspi project
-              //     break;
-              //   case 'ItalFood':
-              //     $creatingOrder->organization    = '3bd63649-f257-11ea-0a80-005d003d9ee4'; // ИП ИталФуд
-              //     $creatingOrder->project         = 'd4986e14-0931-11ef-0a80-0bd6000d967f'; // Kaspi 2 project
-              //     break;
-              //   case 'kasta':
-              //     $creatingOrder->organization    = '640cb82e-82af-11ed-0a80-07fe00255908'; // ИП Accio Retail Store
-              //     $creatingOrder->project         = '7b12e831-0817-11f0-0a80-165a0010ce66'; // Kaspi Kasta project
-              //     break;
-              // }
 
               switch($orderPickupPointCity){
                 case 'astana':
@@ -222,11 +193,7 @@ class CronController extends Controller
                       }
                       break;
                     case 'DELIVERY_PICKUP':
-                      $creatingOrder->deliveryType = $projectConfig->delivery_service; // Zammler
-                      break;
                     case 'DELIVERY_REGIONAL_PICKUP':
-                      $creatingOrder->deliveryType = $projectConfig->delivery_service; // Zammler
-                      break;
                     case 'DELIVERY_REGIONAL_TODOOR':
                       $creatingOrder->deliveryType = $projectConfig->delivery_service; // Zammler
                       break;
@@ -238,19 +205,19 @@ class CronController extends Controller
               }
 
               if($addOrderToMoySklad){
-                $kaspiOrders->add($creatingOrder->kaspiOrderId,$creatingOrder->kaspiOrderExtId);
-                $creatingOrderMS = $moysklad->createOrder($creatingOrder,'kaspi',$shopid);
+                $kaspiOrders->add($creatingOrder->kaspiOrderId,$creatingOrder->kaspiOrderExtId,'created');
+                $creatingOrderMS = $moysklad->createOrder($creatingOrder,'kaspi',$shopkey);
 
                 if(property_exists($creatingOrderMS,'errors')){
                   $errorsStr = '';
                   foreach ($creatingOrderMS->errors as $error) {
                     $errorsStr .= $error->error . PHP_EOL;
                   }
-                  $telegram->sendTelegramMessage('Ошибка создания заказа Kaspi (' .$shopid . ') #' . $order->attributes->code . '. Ответ МойСклад:' . PHP_EOL . $errorsStr, 'kaspi');
+                  $telegram->sendTelegramMessage('Ошибка создания заказа Kaspi (' .$shopkey . ') #' . $order->attributes->code . '. Ответ МойСклад:' . PHP_EOL . $errorsStr, 'kaspi');
                 }
                 else {
-                  $kaspi->setKaspiOrderStatus($creatingOrder,'ACCEPTED_BY_MERCHANT',$shopid);
-                  $telegram->sendTelegramMessage('Заказ Kaspi (' .$shopid . ') #' . $order->attributes->code . ' успешно добавлен в МойСклад.', 'kaspi');
+                  $kaspi->setKaspiOrderStatus($creatingOrder,'ACCEPTED_BY_MERCHANT',$shopkey);
+                  $telegram->sendTelegramMessage('Заказ Kaspi (' . $shopkey . ') #' . $order->attributes->code . ' успешно добавлен в МойСклад.', 'kaspi');
                 }
               }
             }
@@ -264,5 +231,171 @@ class CronController extends Controller
           }
         }
       }
+    }
+
+    public function actionCheckfinishedorders() // Проверка завершения заказов Каспи
+    {
+      $moysklad     = new Moysklad();
+      $kaspi        = new Kaspi();
+      $kaspiOrders  = new KaspiOrders();
+      $website      = new Website();
+      $telegram     = new Telegram();
+      $whatsapp     = new Whatsapp();
+
+      $kaspiShops = Yii::$app->params['moysklad']['kaspiProjects'];
+
+      foreach ($kaspiShops as $shopkey => $shopid) {
+        $orders = $kaspi->getKaspiOrders($shopkey,'ARCHIVE','COMPLETED');
+
+        foreach ($orders->data as $order) {
+          $orderCode    = $order->attributes->code;
+          $sentToClient = $kaspiOrders->isReviewAlreadySent($orderCode);
+
+          if(!$sentToClient){
+
+            $customer     = $order->attributes->customer;
+            $productsData = $kaspi->getKaspiOrderProducts($order->id,$shopkey);
+            $link         = false;
+            $orderProduct = $productsData->data[0];
+
+            $productWebsiteData = self::getProductWebDataBySku($orderProduct->attributes->offer->code);
+
+            if(!empty(trim($productWebsiteData['kaspi_code']))){
+              $link = 'https://kaspi.kz/shop/review/productreview?orderCode=' . $order->attributes->code . '&productCode=' . trim($productWebsiteData['kaspi_code']) . '&rating=5';
+            }
+
+            if($link){
+              $messageInfo          = (object)array();
+              $messageInfo->name    = (empty($customer->name)) ? $customer->firstName : $customer->name;
+              $messageInfo->link    = $link;
+              $messageInfo->orderid = $order->attributes->code;
+
+              $customer->cellPhone  = '+7' . $customer->cellPhone;
+
+              $sendWhatsappMessage  = true;
+              switch($shopkey){
+                case 'accio':
+                  $waTemplate = 'set_kaspi_opinion_by_client_with_buttons_8';
+                  break;
+                case 'ital':
+                  $waTemplate = 'set_italfoods_kaspi_opinion_by_client_with_buttons_2';
+                  $sendWhatsappMessage = false;
+                  break;
+                case 'tutto':
+                  $waTemplate = 'set_kaspi_opinion_by_client_with_buttons_8';
+                  $sendWhatsappMessage = false;
+                  break;
+              }
+
+              $sendPulseWhatsappMessage   = $whatsapp->sendWhatsappMessage($messageInfo,$customer->cellPhone,$waTemplate,$shopid,$sendWhatsappMessage);
+              if($sendPulseWhatsappMessage['success']){
+                $checkPulseWhatsappMessage  = $whatsapp->checkWhatsappSendpulseMessage($sendPulseWhatsappMessage);
+              }
+
+              if($sendPulseWhatsappMessage){
+                if($sendPulseWhatsappMessage['success'] == 1){
+                  $dbOrder = KaspiOrders::findByCode($order->attributes->code);
+                  if ($dbOrder) {
+                      $dbOrder->markSentToClient();
+                  }
+
+                  switch($shopkey){
+                    case 'tutto':
+                    case 'ital':
+                      break;
+                    default:
+                      $telegram->sendTelegramMessage('Клиент ' . $customer->name . ' получил WhatsApp-сообщение с просьбой оставить отзыв на товар ' . $productWebsiteData['title'] . ' в заказе ' . $order->attributes->code . ' (' . $shopkey . ')' . '.', 'kaspi');
+                  }
+                }
+              }
+            }
+
+
+          }
+        }
+      }
+
+    }
+
+    public function actionCheckcancelledorders() // Проверка отмененных заказов
+    {
+      $moysklad     = new Moysklad();
+      $kaspi        = new Kaspi();
+      $kaspiOrders  = new KaspiOrders();
+      $website      = new Website();
+      $telegram     = new Telegram();
+      $whatsapp     = new Whatsapp();
+
+      $kaspiShops = Yii::$app->params['moysklad']['kaspiProjects'];
+
+      foreach ($kaspiShops as $shopkey => $shopid) {
+
+        $orders1 = $kaspi->getKaspiOrders($shopkey,'ARCHIVE','CANCELLED','-10 hours');
+        $orders2 = $kaspi->getKaspiOrders($shopkey,'NEW','CANCELLED','-10 hours');
+        $orders3 = $kaspi->getKaspiOrders($shopkey,'SIGN_REQUIRED','CANCELLED','-10 hours');
+        $orders4 = $kaspi->getKaspiOrders($shopkey,'PICKUP','CANCELLED','-10 hours');
+        $orders5 = $kaspi->getKaspiOrders($shopkey,'KASPI_DELIVERY','CANCELLED','-10 hours');
+        $orders6 = $kaspi->getKaspiOrders($shopkey,'DELIVERY','CANCELLED','-10 hours');
+        $orders7 = $kaspi->getKaspiOrders($shopkey,'ARCHIVE','CANCELLING','-10 hours');
+        $orders8 = $kaspi->getKaspiOrders($shopkey,'NEW','CANCELLING','-10 hours');
+        $orders9 = $kaspi->getKaspiOrders($shopkey,'SIGN_REQUIRED','CANCELLING','-10 hours');
+        $orders10 = $kaspi->getKaspiOrders($shopkey,'PICKUP','CANCELLING','-10 hours');
+        $orders11 = $kaspi->getKaspiOrders($shopkey,'KASPI_DELIVERY','CANCELLING','-10 hours');
+        $orders12 = $kaspi->getKaspiOrders($shopkey,'DELIVERY','CANCELLING','-10 hours');
+        $ordersAll= array_merge($orders1->data,$orders2->data,$orders3->data,$orders4->data,$orders5->data,$orders6->data,$orders7->data,$orders8->data,$orders9->data,$orders10->data,$orders11->data,$orders12->data);
+
+        foreach ($ordersAll as $order) {
+
+          if($order->attributes->status == 'CANCELLED'){} else { continue; }
+
+          $dbOrder = KaspiOrders::findByCode($order->attributes->code);
+
+          if($dbOrder){
+            $ordersMsInfo = $moysklad->checkOrderInMoySkladByMarketplaceCode($order->attributes->code);
+
+            if($ordersMsInfo){
+              foreach ($ordersMsInfo as $iorder) {
+                $demandsList = $iorder->demands;
+
+                foreach ($demandsList as $demand) {
+                  $demandId     = basename($demand->meta->href);
+                  $setTgMessage = false;
+
+                  switch($dbOrder->status){
+                    case 'created': // 0ba2e09c-cda1-11eb-0a80-03110030c70c - статус Без чека - Возврат на склад
+                      $demandStateMeta = $moysklad->buildStateMeta('demand', YII::$app->params['moysklad']['demandUpdateHandler']['stateDemandReturnNoCheck']);
+                      $moysklad->updateDemandState($demandId,$demandStateMeta);
+                      $returnType = 'Без чека - Возврат на склад';
+                      file_put_contents(__DIR__ . '/../logs/kaspi/kaspiCancelledOrders.txt', date('d.m.Y') . PHP_EOL . 'CREATED' . PHP_EOL . print_r($order,true) . PHP_EOL . PHP_EOL,FILE_APPEND);
+                      $setTgMessage = true;
+                      break;
+                    case 'assemble': // 2a6c9db5-a7c4-11ed-0a80-10870015e950 - статус Провести возврат
+                      $demandStateMeta = $moysklad->buildStateMeta('demand', YII::$app->params['moysklad']['demandUpdateHandler']['stateDemandDoReturn']);
+                      $moysklad->updateDemandState($demandId,$demandStateMeta);
+                      $returnType = 'Провести возврат';
+                      file_put_contents(__DIR__ . '/../logs/kaspi/kaspiCancelledOrders.txt', date('d.m.Y') . PHP_EOL . 'ASSEMBLED' . PHP_EOL . print_r($order,true) . PHP_EOL . PHP_EOL,FILE_APPEND);
+                      $setTgMessage = true;
+                      break;
+                  }
+
+                  $dbOrder->updateStatus('cancelled');
+
+                  if($setTgMessage){
+                    $tgMessage = 'Требуется оформить возврат для заказа Каспи #' . $order->attributes->code . PHP_EOL;
+                    $tgMessage .= 'Тип возврата - ' . $returnType . PHP_EOL;
+                    $tgMessage .= 'Магазин Каспи - ' . $shopid;
+
+                    $telegram->sendTelegramMessage($tgMessage, 'cancelled');
+                  }
+                }
+
+              }
+            }
+          }
+
+        }
+
+      }
+
     }
 }

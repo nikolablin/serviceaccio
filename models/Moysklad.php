@@ -1797,7 +1797,7 @@ class Moysklad extends Model
     return false;
   }
 
-  public static function setFileToDemand($demandId,$fileUrl)
+  public function setFileToDemand($demandId,$fileUrl)
   {
     $accessdata = self::getMSLoginPassword();
 
@@ -1836,13 +1836,10 @@ class Moysklad extends Model
 
     $response = curl_exec($curl);
 
-    file_put_contents(__DIR__ . '/setFileQuery.txt',print_r($data,true));
-    file_put_contents(__DIR__ . '/setFileResponse.txt',print_r($response,true));
-
     curl_close($curl);
   }
 
-  public static function markWaybillDelivery($demandId)
+  public function markWaybillDelivery($demandId)
   {
     $accessdata = self::getMSLoginPassword();
 
@@ -1967,14 +1964,20 @@ class Moysklad extends Model
     return 'ce22d9f6-4941-11ed-0a80-00bd000e47e9';
   }
 
-  public function createOrder($order,$area,$shopid)
+  public function createOrder($order,$area,$shopkey)
   {
     $data = (object)array();
-    $data->name = $order->kaspiOrderId . '_' . $area . '_' . $shopid;
+    $data->name = $order->kaspiOrderId . '_' . $area . '_' . $shopkey;
 
     if($order->comment):
       $data->description = $order->comment;
     endif;
+
+    $data->project = (object)array();
+    $data->project->meta = (object)array();
+    $data->project->meta->href = 'https://api.moysklad.ru/api/remap/1.2/entity/project/' . $order->project;
+    $data->project->meta->type = 'project';
+    $data->project->meta->mediaType = 'application/json';
 
     $data->organization = (object)array();
     $data->organization->meta = (object)array();

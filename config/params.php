@@ -38,6 +38,7 @@ return [
         'd3e01366-75ca-11eb-0a80-02590037e535',
         '6d4d6565-79a4-11eb-0a80-07bf001ea079',
       ],
+      'takeToJobOrderState' => '02482aa0-ee91-11ea-0a80-05f20007446d',
       'deleteAllFromOrderState' => '02482aa0-ee91-11ea-0a80-05f20007446d',
       'orderStateInvoiceIssued' => '6d4d6565-79a4-11eb-0a80-07bf001ea079',
       'invoiceOutStateIssued' => '8cb3325d-0a72-11ed-0a80-0266001870b2',
@@ -84,9 +85,14 @@ return [
       'paymentTypeAttrId' => '19fb8dcf-94ac-11ed-0a80-0e930023e914',
       'configFallbackByPaymentType' => false, // по желанию
       'kaspiProjects' => [
-        '5f351348-d269-11f0-0a80-15120016d622', // 🔴 Kaspi Accio
-        '431a8172-d26a-11f0-0a80-0f110016cabd', // 🔴 Tutto Capsule Kaspi
-        '98777142-d26a-11f0-0a80-1be40016550a', // 🔴 Ital Trade
+        'accio' => '5f351348-d269-11f0-0a80-15120016d622', // 🔴 Kaspi Accio
+        'tutto' => '431a8172-d26a-11f0-0a80-0f110016cabd', // 🔴 Tutto Capsule Kaspi
+        'ital'  => '98777142-d26a-11f0-0a80-1be40016550a', // 🔴 Ital Trade
+      ],
+      'kaspiTokens' => [
+        'accio' => 'dbU852Hq+JDbq5OiGDE+lZOkbpKgNX/qFfYfQTBYU60=',
+        'tutto' => 'BiQdZihpwlTXKY2Ny6mCQiVnPHw8YwuuXExf6o1PB+8=',
+        'ital'  => 'GBdEjOo4M4miI1ghi/yN/y9L6BZMrpE3UKRx4Vsc0lM='
       ]
     ],
 ];

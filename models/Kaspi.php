@@ -26,18 +26,9 @@ class Kaspi extends Model
     }
   }
 
-  public function getKaspiShops()
+  public function getKaspiOrders($shopkey, $kaspiState = false, $kaspiStatus = false, $modifyTime = '-15 minutes')
   {
-    return [
-      'accio',
-      'ItalFood',
-      'kasta'
-    ];
-  }
-
-  public function getKaspiOrders($shopid, $kaspiState = false, $kaspiStatus = false, $modifyTime = '-15 minutes')
-  {
-    $token = self::getKaspiToken($shopid);
+    $token = Yii::$app->params['moysklad']['kaspiTokens'][$shopkey];
 
     $curl = curl_init();
 
@@ -72,9 +63,9 @@ class Kaspi extends Model
     return json_decode($response);
   }
 
-  public function getKaspiOrderProducts($oid,$shopid)
+  public function getKaspiOrderProducts($oid,$shopkey)
   {
-    $token = self::getKaspiToken($shopid);
+    $token = Yii::$app->params['moysklad']['kaspiTokens'][$shopkey];
 
     $curl = curl_init();
 
@@ -93,12 +84,15 @@ class Kaspi extends Model
     ));
 
     $response = curl_exec($curl);
+
+    curl_close($curl);
+
     return json_decode($response);
   }
 
-  public function getKaspiLinkData($link,$shopid)
+  public function getKaspiLinkData($link,$shopkey)
   {
-    $token = self::getKaspiToken($shopid);
+    $token = Yii::$app->params['moysklad']['kaspiTokens'][$shopkey];
 
     $curl = curl_init();
 
@@ -134,9 +128,9 @@ class Kaspi extends Model
     return $deliveryDate;
   }
 
-  public function setKaspiOrderStatus($order,$orderStatus,$shopid)
+  public function setKaspiOrderStatus($order,$orderStatus,$shopkey)
   {
-    $token = self::getKaspiToken($shopid);
+    $token = Yii::$app->params['moysklad']['kaspiTokens'][$shopkey];
 
     $data                           = (object)array();
     $data->data                     = (object)array();
@@ -144,6 +138,8 @@ class Kaspi extends Model
     $data->data->id                 = $order->kaspiOrderExtId;
     $data->data->attributes         = (object)array();
     $data->data->attributes->status = $orderStatus;
+
+    file_put_contents(__DIR__ . '/../logs/kaspi/kaspiChangeStatusOrders.txt', date('d.m.Y') . PHP_EOL . $token . PHP_EOL . print_r($data,true) . PHP_EOL,FILE_APPEND);
 
     switch($orderStatus){
       case 'ACCEPTED_BY_MERCHANT':
@@ -170,6 +166,8 @@ class Kaspi extends Model
     curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
     $server_output = json_decode(curl_exec ($ch));
 
+    file_put_contents(__DIR__ . '/../logs/kaspi/kaspiChangeStatusOrders.txt', print_r($server_output,true) . PHP_EOL . PHP_EOL,FILE_APPEND);
+
     curl_close ($ch);
 
   }
@@ -183,12 +181,12 @@ class Kaspi extends Model
         $points->pp2name = 'Accio_PP2';
         $points->pp15name = 'Accio_PP15';
         break;
-      case 'ItalFood':
+      case 'ital':
         $points->pp1name = '30093069_PP1';
         $points->pp2name = '30093069_PP2';
         $points->pp15name = '30093069_PP15';
         break;
-      case 'kasta':
+      case 'tutto':
         $points->pp1name = '30224658_PP1';
         $points->pp2name = '30224658_PP2';
         $points->pp15name = false;
@@ -198,9 +196,9 @@ class Kaspi extends Model
     return $points;
   }
 
-  public static function getKaspiOrder($orderId,$shopid,$checkwaybill = false)
+  public static function getKaspiOrder($orderId,$shopkey,$checkwaybill = false)
   {
-    $token = self::getKaspiToken($shopid);
+    $token = Yii::$app->params['moysklad']['kaspiTokens'][$shopkey];
 
     $curl = curl_init();
     $goreturn = false;
@@ -238,7 +236,7 @@ class Kaspi extends Model
     return json_decode($response);
   }
 
-  public function setKaspiReadyForDelivery($kaspiOrderCode,$numberOfPlaces,$status,$organizationId)
+  public function setKaspiReadyForDelivery($kaspiOrderCode,$numberOfPlaces,$status,$projectId)
   {
     $kaspiOrders            = new KaspiOrders();
     $telegram               = new Telegram();
@@ -248,16 +246,21 @@ class Kaspi extends Model
     $order->kaspiOrderId    = $kaspiOrderCode;
     $order->numOfPlaces     = $numberOfPlaces;
 
-    switch (trim($organizationId ?? '')) {
-      case '5f351348-d269-11f0-0a80-15120016d622': $order->shopId = 'accio'; break;
-      case '98777142-d26a-11f0-0a80-1be40016550a': $order->shopId = 'ItalFood'; break;
-      case '431a8172-d26a-11f0-0a80-0f110016cabd': $order->shopId = 'kasta'; break;
-      default:
-          $telegram->sendTelegramMessage(
-              'Kaspi readyForDelivery: неизвестный orgId=' . ($organizationId ?? 'NULL') . ' для заказа #' . $kaspiOrderCode,
-              'kaspi'
-          );
-          return;
+    $kaspiProjects = Yii::$app->params['moysklad']['kaspiProjects'];
+
+    $order->shopId = false;
+    foreach ($kaspiProjects as $shopkey => $shopid) {
+      if($projectId == $shopid){
+        $order->shopId = $shopkey;
+      }
+    }
+
+    if(!$order->shopId){
+      $telegram->sendTelegramMessage(
+        'Kaspi readyForDelivery: неизвестный projectId=' . ($kaspiOrderCode ?? 'NULL') . ' для заказа #' . $kaspiOrderCode,
+        'kaspi'
+      );
+      return;
     }
 
     switch($status) {
@@ -291,7 +294,6 @@ class Kaspi extends Model
 
         // 4) Получаем waybill (из API Kaspi)
         $orderData = self::getKaspiOrder($order->kaspiOrderId, $order->shopId, true);
-        file_put_contents(__DIR__ . '/orderdata.txt', print_r($orderData, true) . PHP_EOL . PHP_EOL, FILE_APPEND);
 
         $waybillLink = null;
         if (!empty($orderData->data) && !empty($orderData->data[0]->attributes->kaspiDelivery->waybill)) {
@@ -314,12 +316,13 @@ class Kaspi extends Model
         if (!empty($orderInfo)) {
             foreach ($orderInfo as $iorder) {
                 $demandsList = $iorder->demands ?? [];
+
                 foreach ($demandsList as $demand) {
                     $href = $demand->meta->href ?? null;
                     if (!$href) continue;
 
-                    $demandId = explode('/', $href);
-                    $demandId = end($demandId);
+
+                    $demandId = basename($href);
 
                     $moysklad->setFileToDemand($demandId, $waybillLink);
                     $moysklad->markWaybillDelivery($demandId);
@@ -337,5 +340,28 @@ class Kaspi extends Model
         break;
     }
 
+  }
+
+  public function checkOrderSentToClient($order)
+  {
+    $db = new db();
+    $db->init('localhost:3306', 'acciosto_user', 'Uj524#b2l', 'acciosto_db');
+
+    $query = 'SELECT * FROM `vu1dh_kaspi_orders` WHERE `order_id` = "' . $order->attributes->code . '"';
+    $result = $db->sql($query);
+
+    if(!empty($result)){
+      $result = array_values($result)[0];
+      if((int)$result['sent_to_client']){
+        return true; // Already sent to client
+      }
+      else {
+        return false;
+      }
+    }
+    else {
+      return true; // Not exist in DB, skip sending;
+    }
+    return false; // Not sent
   }
 }

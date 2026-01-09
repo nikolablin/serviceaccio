@@ -164,7 +164,8 @@ class DemandUpdateHandler
                             "FISCAL SKIP: cash_register empty (no config) demand={$demand->id}\n",
                             FILE_APPEND
                         );
-                    } else {
+                    }
+                    else {
                         // 2) Идемпотентность: если уже есть чек — НЕ создаём новый, а обновляем текущий и отправляем снова
                         $existingReceiptId = OrdersReceipts::find()
                             ->select(['id'])
@@ -241,7 +242,8 @@ class DemandUpdateHandler
 
                             $receiptId = (int)$existingReceiptId;
 
-                        } else {
+                        }
+                        else {
                             $metaReceipt = [
                                 'order_id'            => (int)($orderModel->id ?? 0),
                                 'moysklad_order_id'   => (string)($msOrder->id ?? ''),
@@ -257,7 +259,7 @@ class DemandUpdateHandler
                         $sent = CashRegister::sendReceiptById((int)$receiptId, false);
 
                         // лог
-                        file_put_contents(__DIR__ . '/../logs/ms_service/ukassa_receipt_send.txt',
+                        file_put_contents(__DIR__ . '/../logs/ms_service/ukassa_receipt.txt',
                             "SEND receipt_id={$receiptId}\n" .
                             "RESULT=" . print_r($sent, true) . "\n----\n",
                             FILE_APPEND
@@ -270,14 +272,10 @@ class DemandUpdateHandler
                   $kaspiOrderNum = $moysklad->getProductAttribute($msOrder->attributes,'a7f0812d-a0a3-11ed-0a80-114f003fc7f9');
                   $kaspiOrderNum = (!$kaspiOrderNum) ? '-' : $kaspiOrderNum->value;
 
-                  $kaspiExtOrderNum = '';
-
                   $placesNum = $moysklad->getProductAttribute($demand->attributes,'f1d4a71a-c29a-11eb-0a80-001f0003a1be');
                   $placesNum = (!$placesNum) ? 1 : $placesNum->value;
 
-                  $orgId = basename($demand->organization->meta->href) : null;
-
-                  $kaspi->setKaspiReadyForDelivery($kaspiOrderNum,$placeNum,'readyForDelivery',$orgId);
+                  $kaspi->setKaspiReadyForDelivery($kaspiOrderNum,$placesNum,'readyForDelivery',$msOrder->project->id);
                 }
 
                 // 3) Заказу поставить статус "Собран"
@@ -550,7 +548,7 @@ class DemandUpdateHandler
                             // отправляем реально (dryrun=false)
                             $sent = CashRegister::sendReceiptById((int)$receiptId, false);
 
-                            file_put_contents(__DIR__ . '/../logs/ms_service/ukassa_receipt_return.txt',
+                            file_put_contents(__DIR__ . '/../logs/ms_service/ukassa_receipt.txt',
                                 "RETURN RECEIPT receipt_id={$receiptId}\n" .
                                 "RESULT=" . print_r($sent, true) . "\n----\n",
                                 FILE_APPEND
@@ -687,15 +685,6 @@ class DemandUpdateHandler
                     FILE_APPEND
                 );
 
-
-
-
-
-
-
-
-
-
                 // 2) Статус заказа = Завершен (всегда, даже если документ уже был)
                 $completed = Yii::$app->params['moysklad']['orderStateCompleted'] ?? null;
                 if ($completed) {
@@ -711,7 +700,6 @@ class DemandUpdateHandler
                         );
                     }
                 }
-
 
                 continue;
             }

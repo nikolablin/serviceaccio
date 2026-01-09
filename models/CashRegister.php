@@ -49,16 +49,16 @@ class CashRegister extends Model
         $ttl = (int)($cfg['tokenCacheTtl'] ?? 0);
         $cacheKey = 'ukassa_token_' . $cashRegisterCode;
 
-        // if ($ttl > 0 && isset(Yii::$app->cache)) {
-        //     $cached = Yii::$app->cache->get($cacheKey);
-        //     if (is_string($cached) && $cached !== '') {
-        //         return $cached;
-        //     }
-        // }
+        if ($ttl > 0 && isset(Yii::$app->cache)) {
+            $cached = Yii::$app->cache->get($cacheKey);
+            if (is_string($cached) && $cached !== '') {
+                return $cached;
+            }
+        }
 
         $res = self::loginUkassaUser($login, $pwd, $hashline);
 
-        file_put_contents(__DIR__ . '/../logs/ms_service/ukassa_receipt_dryrun.txt',
+        file_put_contents(__DIR__ . '/../logs/ms_service/ukassa_receipt.txt',
             print_r($res,true) . "\n----\n",
             FILE_APPEND
         );
@@ -295,13 +295,6 @@ class CashRegister extends Model
 
         // ✅ real send
         $res = self::ukassaPostJson($url, $payload, $headers, false);
-
-        file_put_contents(__DIR__ . '/../logs/ms_service/ukassa_receipt_dryrun.txt',
-            print_r($res,true) . "\n----\n",
-            FILE_APPEND
-        );
-        exit();
-
 
         $receipt->response_json = $res['raw'] ?: null;
         $receipt->ukassa_status = $res['ok'] ? 'sent' : 'error';

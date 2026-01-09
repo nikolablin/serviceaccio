@@ -47,9 +47,35 @@ class KaspiOrders extends ActiveRecord
         return true;
     }
 
-    public function findByCode(string $code): ?self
+    public static function findByCode(string $code): ?self
     {
-        return self::find()->where(['order_code' => $code])->limit(1)->one();
+        return self::find()->where(['order_id' => $code])->limit(1)->one();
+    }
+
+    public function isReviewAlreadySent(string $orderCode): bool
+    {
+      $order = self::find()
+          ->select(['sent_to_client'])
+          ->where(['order_id' => $orderCode])
+          ->limit(1)
+          ->one();
+
+      if (!$order) {
+          return true;
+      }
+
+      return (int)$order->sent_to_client === 1;
+    }
+
+    public function markSentToClient(): bool
+    {
+        if ((int)$this->sent_to_client === 1) {
+            return true;
+        }
+
+        $this->sent_to_client = 1;
+
+        return $this->save(false, ['sent_to_client', 'updated_at']);
     }
 
     public function updateStatus(string $status): bool

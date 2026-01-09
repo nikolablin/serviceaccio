@@ -39,7 +39,7 @@ class CustomerOrderCreateHandler
         /**
          * 2️⃣ Работаем ТОЛЬКО с проектами,
          *     для которых есть конфигурация
-         */ 
+         */
          $configData = (new \app\services\OrdersConfigResolver())->resolve($order);
         // $configData = OrdersConfigTable::findOne([
         //     'project' => $projectId,
@@ -61,30 +61,7 @@ class CustomerOrderCreateHandler
         }
 
         /**
-         * 4️⃣ Применяем конфиг к заказу в МС
-         */
-        $updated = $moysklad->updateOrderWithConfig($order->id, $configData);
-
-        // file_put_contents(__DIR__ . '/../logs/ms_service/test.txt',print_r($updated,true));
-        // exit();
-
-        if ($updated) {
-            $ph = $updated->positions->meta->href ?? null;
-            if ($ph) {
-                $updated->positions = $moysklad->getHrefData(
-                    $ph . '?expand=assortment'
-                );
-            }
-            if (empty($updated->state->meta->href)) {
-                $updated = $moysklad->getHrefData(
-                    $event->meta->href . '?expand=agent,project,organization,store,state,paymentType,attributes'
-                );
-            }
-            $order = $updated;
-        }
-
-        /**
-         * 5️⃣ Сохраняем локально
+         * 4) Сохраняем локально
          */
         $stateHref = $order->state->meta->href ?? null;
         $stateId   = $stateHref ? basename($stateHref) : null;
@@ -101,6 +78,38 @@ class CustomerOrderCreateHandler
 
         OrdersClients::upsertFromMs($orderId, $order);
         OrdersProducts::syncFromMs($orderId, $order);
+
+        /**
+         * 5) Применяем конфиг к заказу в МС
+         */
+
+       /**
+       * Проверяем заказы Каспи. Так как они приходят из системы, то им автоматически назначается статус Подтвержден - К отправке
+       * Исключением является недостаточность товара на складе, тогда заказу автоматически присваивается заказ Взять в работу.
+       * И автоматически переопрделять его не нужно.
+       */
+       if(in_array($projectId,Yii::$app->params['moysklad']['kaspiProjects'])){
+         if($stateId == Yii::$app->params['moysklad']['takeToJobOrderState']){
+           unset($configData->status);
+         }
+       }
+
+        $updated = $moysklad->updateOrderWithConfig($order->id, $configData);
+
+        if ($updated) {
+            $ph = $updated->positions->meta->href ?? null;
+            if ($ph) {
+                $updated->positions = $moysklad->getHrefData(
+                    $ph . '?expand=assortment'
+                );
+            }
+            if (empty($updated->state->meta->href)) {
+                $updated = $moysklad->getHrefData(
+                    $event->meta->href . '?expand=agent,project,organization,store,state,paymentType,attributes'
+                );
+            }
+            $order = $updated;
+        }
 
         /**
          * 6️⃣ Создание отгрузки (ТОЛЬКО нужные статусы)
