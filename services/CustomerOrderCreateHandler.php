@@ -27,7 +27,7 @@ class CustomerOrderCreateHandler
          * 1️⃣ Загружаем заказ из МС
          */
         $order = $moysklad->getHrefData(
-            $event->meta->href . '?expand=agent,project,organization,store,state,paymentType,attributes'
+            $event->meta->href . '?expand=agent,project,organization,store,state,paymentType,attributes,positions'
         );
 
         if (empty($order->project->meta->href)) {
@@ -105,7 +105,7 @@ class CustomerOrderCreateHandler
             }
             if (empty($updated->state->meta->href)) {
                 $updated = $moysklad->getHrefData(
-                    $event->meta->href . '?expand=agent,project,organization,store,state,paymentType,attributes'
+                    $event->meta->href . '?expand=agent,project,organization,store,state,paymentType,attributes,positions'
                 );
             }
             $order = $updated;

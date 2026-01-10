@@ -1457,7 +1457,9 @@ class Moysklad extends Model
       }
     }
 
-    $ch = curl_init('https://api.moysklad.ru/api/remap/1.2/entity/customerorder/' . $orderId . '?expand=agent,project,organization,store,state');
+file_put_contents(__DIR__ . '/../logs/ms_service/updatecustomerorder.txt', PHP_EOL . PHP_EOL . 'UPDATEORDERWITHCONFIG: ' . print_r($data,true) . PHP_EOL . PHP_EOL, FILE_APPEND);
+
+    $ch = curl_init('https://api.moysklad.ru/api/remap/1.2/entity/customerorder/' . $orderId . '?expand=agent,project,organization,store,state,positions,attributes');
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "PUT");
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
@@ -1662,12 +1664,8 @@ class Moysklad extends Model
 
       $payload = $this->buildDemandPayloadFromOrder($msorder, $config, $options);
 
-      file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt','PAYLOAD:::' . print_r($payload,true) . PHP_EOL, FILE_APPEND);
-
       // 1) проверяем, есть ли demand уже
       $link = OrdersDemands::findOne(['moysklad_order_id' => (string)$msorder->id]);
-
-      file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt','LINK:::' . print_r($link,true) . PHP_EOL, FILE_APPEND);
 
       if ($link && !empty($link->moysklad_demand_id)) {
           // UPDATE demand
@@ -2593,22 +2591,36 @@ class Moysklad extends Model
           $positions[] = [
               'assortment' => ['meta' => $pos->assortment->meta],
               'quantity'   => (float)($pos->quantity ?? 0),
-              'price'      => (int)($pos->price ?? 0), // в МС цена обычно в копейках
-              // 'vat'      => ... при необходимости
+              'price'      => (int)($pos->price ?? 0),
           ];
       }
+
+      // ✅ Атрибут "Причина возврата"
+      $attributes = [
+          [
+              'meta' => [
+                  'href'      => 'https://api.moysklad.ru/api/remap/1.2/entity/salesreturn/metadata/attributes/245c1e2c-857c-11ec-0a80-00ca00032d13',
+                  'type'      => 'attributemetadata',
+                  'mediaType' => 'application/json',
+              ],
+              'value' => [
+                  'meta' => [
+                      'href'         => 'https://api.moysklad.ru/api/remap/1.2/entity/customentity/e374d372-857b-11ec-0a80-0fbe0003a99c/f3aa06bf-857b-11ec-0a80-07b7000347ae',
+                      'metadataHref'=> 'https://api.moysklad.ru/api/remap/1.2/context/companysettings/metadata/customEntities/e374d372-857b-11ec-0a80-0fbe0003a99c',
+                      'type'         => 'customentity',
+                      'mediaType'   => 'application/json',
+                  ],
+              ],
+          ],
+      ];
 
       $payload = [
           'organization' => ['meta' => $order->organization->meta],
           'agent'        => ['meta' => $order->agent->meta],
-
-          // ВАЖНО: привязка возврата к отгрузке
           'demand'       => ['meta' => $demand->meta],
-
-          // Чтобы возврат был “черновиком” (проводку снимем отдельно или сразу false)
           'applicable'   => false,
-
           'positions'    => $positions,
+          'attributes'   => $attributes,
       ];
 
       return $this->requestJson('POST', $url, $payload);

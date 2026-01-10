@@ -92,7 +92,7 @@ class DemandUpdateHandler
 
         $STATE_DEMAND_DO_RETURN       = $cfg['stateDemandDoReturn'] ?? '';
 
-        $STATE_ORDER_RETURN_FINAL     = $cfg[''];
+        $STATE_ORDER_RETURN_FINAL     = $cfg['stateOrderReturn'];
 
         /**
          * 3️⃣ Находим связанные заказы локально
