@@ -90,7 +90,7 @@ class CustomerOrderCreateHandler
        * Также переопрделять службу доставки не нужно
        */
        if(in_array($projectId,Yii::$app->params['moysklad']['kaspiProjects'])){
-         unset($configData->status);
+         $configData->status = false;
          $configData->delivery_service = $moysklad->getAttributeValueId($order,'8a307d43-3b6a-11ee-0a80-06ae000fd467');
        }
 

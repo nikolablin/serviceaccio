@@ -158,7 +158,7 @@ class DemandUpdateHandler
                 );
 
                 if ($needFiscal) {
-                    // 1) Берём кассу из конфигов по проекту
+
                     $cashRegisterCode = $this->resolveCashRegisterCodeForOrder($msOrder);
 
                     if ($cashRegisterCode === '') {
@@ -166,127 +166,226 @@ class DemandUpdateHandler
                             "FISCAL SKIP: cash_register empty (no config) demand={$demand->id}\n",
                             FILE_APPEND
                         );
+                        continue;
                     }
-                    else {
-                        // 2) Идемпотентность: если уже есть чек — НЕ создаём новый, а обновляем текущий и отправляем снова
-                        $existingReceiptId = OrdersReceipts::find()
-                            ->select(['id'])
-                            ->where([
-                                'moysklad_demand_id' => (string)$demand->id,
-                                'receipt_type'       => 'sale',
-                                'cash_register'      => $cashRegisterCode,
-                            ])
-                            ->orderBy(['id' => SORT_DESC])
-                            ->scalar();
 
-                        // 3) Собираем items/payments ВСЕГДА (чтобы и обновление, и создание использовали одинаковый payload)
-                        $items = [];
-                        $totalSum = 0;
+                    $receiptType = 'sale';
 
-                        $cashboxId = CashRegister::getCashboxIdByRegister($cashRegisterCode);
-                        $sectionId = CashRegister::getSectionIdByRegister($cashRegisterCode);
-                        foreach (($demand->positions->rows ?? []) as $pos) {
-                            $a = $pos->assortment ?? null;
+                    // 1) собрать payload (как у тебя)
+                    $items    = [];
+                    $totalSum = 0;
 
-                            $name = (string)($a->name ?? 'Товар');
-                            $code = (string)($a->code ?? ($a->article ?? ''));
-                            if ($code === '') $code = 'MS-' . (string)($a->id ?? 'item');
+                    $cashboxId = CashRegister::getCashboxIdByRegister($cashRegisterCode);
+                    $sectionId = CashRegister::getSectionIdByRegister($cashRegisterCode);
 
-                            $qty  = (int)round((float)($pos->quantity ?? 1));
-                            $unit = (int)round(((int)($pos->price ?? 0)) / 100);
+                    foreach (($demand->positions->rows ?? []) as $pos) {
+                        $a = $pos->assortment ?? null;
 
-                            $ntin = $moysklad->getProductAttribute($a->attributes,'594f2460-e4af-11f0-0a80-192e0037459c');
-                            $ntin = (!$ntin) ? '-' : $ntin->value;
+                        $name = (string)($a->name ?? 'Товар');
+                        $code = (string)($a->code ?? ($a->article ?? ''));
+                        if ($code === '') $code = 'MS-' . (string)($a->id ?? 'item');
 
-                            $lineTotal = $qty * $unit;
-                            $totalSum += $qty * $unit;
+                        $qty  = (int)round((float)($pos->quantity ?? 1));
+                        $unit = (int)round(((int)($pos->price ?? 0)) / 100);
 
-                            $items[] = [
-                                'name'     => $name,
-                                'price'    => $unit,
-                                'total_amount' => $lineTotal,
-                                'quantity' => $qty,
-                                'is_nds'   => true,
-                                'ntin'     => $ntin,
-                                'section'  => $sectionId,
-                            ];
-                        }
+                        $ntin = $moysklad->getProductAttribute($a->attributes,'594f2460-e4af-11f0-0a80-192e0037459c');
+                        $ntin = (!$ntin) ? '-' : $ntin->value;
 
-                        $dataReceipt = [
-                            'operation'    => YII::$app->params['ukassa']['operationTypeSell'],       // 'sell' / 'sell_return' (для возврата)
-                            'kassa'        => (int)$cashboxId,
-                            'payments'     => [
-                                [
-                                    'payment_type'  => 1,   // 'cash' | 'card' | ...
-                                    'total'         => $totalSum,
-                                    'amount'        => $totalSum
-                                ]
-                            ],
-                            'items'        => $items,
-                            'total_amount' => $totalSum,
-                            'as_html' => false
+                        $lineTotal = $qty * $unit;
+                        $totalSum += $lineTotal;
+
+                        $items[] = [
+                            'name'         => $name,
+                            'price'        => $unit,
+                            'total_amount' => $lineTotal,
+                            'quantity'     => $qty,
+                            'is_nds'       => true,
+                            'ntin'         => $ntin,
+                            'section'      => $sectionId,
                         ];
+                    }
 
-                        // 4) Если чек уже есть — обновляем его запись, если нет — создаём черновик
-                        if ($existingReceiptId) {
-                            /** @var OrdersReceipts $receipt */
-                            $receipt = OrdersReceipts::findOne((int)$existingReceiptId);
+                    $dataReceipt = [
+                        'operation'    => Yii::$app->params['ukassa']['operationTypeSell'],
+                        'kassa'        => (int)$cashboxId,
+                        'payments'     => [[
+                            'payment_type' => 1,
+                            'total'        => $totalSum,
+                            'amount'       => $totalSum,
+                        ]],
+                        'items'        => $items,
+                        'total_amount' => $totalSum,
+                        'as_html'      => false,
+                    ];
 
-                            if ($receipt) {
-                                // обновляем payload
-                                $receipt->request_json  = json_encode($dataReceipt, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                    // 2) получить/создать черновик (атомарно) и обновить payload
+                    $metaReceipt = [
+                        'order_id'           => (int)($orderModel->id ?? 0),
+                        'moysklad_order_id'  => (string)($msOrder->id ?? ''),
+                        'moysklad_demand_id' => (string)($demand->id ?? ''),
+                        'receipt_type'       => $receiptType,
+                    ];
 
-                                // по желанию: сбросить результат прошлой отправки (чтобы было видно новый прогон)
-                                $receipt->response_json = null;
-                                $receipt->error_text    = null;
-                                $receipt->ukassa_status = 'prepared'; // или 'draft' как у тебя принято
+                    $receiptId = CashRegister::upsertReceiptDraft($cashRegisterCode, $metaReceipt, $dataReceipt);
 
-                                $receipt->updated_at    = date('Y-m-d H:i:s');
-                                $receipt->save(false);
-                            }
+                    // 3) отправка с защитой: не слать, если уже есть ticket или sent
+                    $sent = CashRegister::sendReceiptByIdGuarded($receiptId, false);
 
-                            $receiptId = (int)$existingReceiptId;
+                    file_put_contents(__DIR__ . '/../logs/ms_service/ukassa_receipt.txt',
+                        "SEND receipt_id={$receiptId}\nRESULT=" . print_r($sent, true) . "\n----\n",
+                        FILE_APPEND
+                    );
 
-                        }
-                        else {
-                            $metaReceipt = [
-                                'order_id'            => (int)($orderModel->id ?? 0),
-                                'moysklad_order_id'   => (string)($msOrder->id ?? ''),
-                                'moysklad_demand_id'  => (string)($demand->id ?? ''),
-                                'receipt_type'        => 'sale',
-                                'idempotency_key'     => CashRegister::uuidV4()
-                            ];
-
-                            $receiptId = CashRegister::createReceiptDraft($cashRegisterCode, $metaReceipt, $dataReceipt);
-                        }
-
-                        // 5) В ЛЮБОМ СЛУЧАЕ отправляем в UKassa
-                        $sent = CashRegister::sendReceiptById((int)$receiptId, false);
-
-                        // лог
-                        file_put_contents(__DIR__ . '/../logs/ms_service/ukassa_receipt.txt',
-                            "SEND receipt_id={$receiptId}\n" .
-                            "RESULT=" . print_r($sent, true) . "\n----\n",
-                            FILE_APPEND
-                        );
-
-                        $receiptLink = $sent['json']['data']['link'] ?? null;
-
-                        if (!$receiptLink) {
-                            file_put_contents(
-                                __DIR__ . '/../logs/ms_service/ukassa_receipt.txt',
-                                "NO RECEIPT LINK receipt_id={$receiptId}\n" .
-                                print_r($sent['json'], true) . "\n----\n",
-                                FILE_APPEND
-                            );
-                        }
-                        else {
-                          $attrs = $moysklad->buildDemandAttributePayload( '1ff6c2e8-1c3a-11ec-0a80-06650003408f', $receiptLink );
-                          $moysklad->updateDemandAttributes((string)$demand->id, $attrs);
-                        }
-
+                    $receiptLink = $sent['json']['data']['link'] ?? null;
+                    if ($receiptLink) {
+                        $attrs = $moysklad->buildDemandAttributePayload('1ff6c2e8-1c3a-11ec-0a80-06650003408f', $receiptLink);
+                        $moysklad->updateDemandAttributes((string)$demand->id, $attrs);
                     }
                 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                // if ($needFiscal) {
+                //     // 1) Берём кассу из конфигов по проекту
+                //     $cashRegisterCode = $this->resolveCashRegisterCodeForOrder($msOrder);
+                //
+                //     if ($cashRegisterCode === '') {
+                //         file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
+                //             "FISCAL SKIP: cash_register empty (no config) demand={$demand->id}\n",
+                //             FILE_APPEND
+                //         );
+                //     }
+                //     else {
+                //         // 2) Идемпотентность: если уже есть чек — НЕ создаём новый, а обновляем текущий и отправляем снова
+                //         $existingReceiptId = OrdersReceipts::find()
+                //             ->select(['id'])
+                //             ->where([
+                //                 'moysklad_demand_id' => (string)$demand->id,
+                //                 'receipt_type'       => 'sale',
+                //                 'cash_register'      => $cashRegisterCode,
+                //             ])
+                //             ->orderBy(['id' => SORT_DESC])
+                //             ->scalar();
+                //
+                //         // 3) Собираем items/payments ВСЕГДА (чтобы и обновление, и создание использовали одинаковый payload)
+                //         $items = [];
+                //         $totalSum = 0;
+                //
+                //         $cashboxId = CashRegister::getCashboxIdByRegister($cashRegisterCode);
+                //         $sectionId = CashRegister::getSectionIdByRegister($cashRegisterCode);
+                //         foreach (($demand->positions->rows ?? []) as $pos) {
+                //             $a = $pos->assortment ?? null;
+                //
+                //             $name = (string)($a->name ?? 'Товар');
+                //             $code = (string)($a->code ?? ($a->article ?? ''));
+                //             if ($code === '') $code = 'MS-' . (string)($a->id ?? 'item');
+                //
+                //             $qty  = (int)round((float)($pos->quantity ?? 1));
+                //             $unit = (int)round(((int)($pos->price ?? 0)) / 100);
+                //
+                //             $ntin = $moysklad->getProductAttribute($a->attributes,'594f2460-e4af-11f0-0a80-192e0037459c');
+                //             $ntin = (!$ntin) ? '-' : $ntin->value;
+                //
+                //             $lineTotal = $qty * $unit;
+                //             $totalSum += $qty * $unit;
+                //
+                //             $items[] = [
+                //                 'name'     => $name,
+                //                 'price'    => $unit,
+                //                 'total_amount' => $lineTotal,
+                //                 'quantity' => $qty,
+                //                 'is_nds'   => true,
+                //                 'ntin'     => $ntin,
+                //                 'section'  => $sectionId,
+                //             ];
+                //         }
+                //
+                //         $dataReceipt = [
+                //             'operation'    => YII::$app->params['ukassa']['operationTypeSell'],       // 'sell' / 'sell_return' (для возврата)
+                //             'kassa'        => (int)$cashboxId,
+                //             'payments'     => [
+                //                 [
+                //                     'payment_type'  => 1,   // 'cash' | 'card' | ...
+                //                     'total'         => $totalSum,
+                //                     'amount'        => $totalSum
+                //                 ]
+                //             ],
+                //             'items'        => $items,
+                //             'total_amount' => $totalSum,
+                //             'as_html' => false
+                //         ];
+                //
+                //         // 4) Если чек уже есть — обновляем его запись, если нет — создаём черновик
+                //         if ($existingReceiptId) {
+                //             /** @var OrdersReceipts $receipt */
+                //             $receipt = OrdersReceipts::findOne((int)$existingReceiptId);
+                //
+                //             if ($receipt) {
+                //                 // обновляем payload
+                //                 $receipt->request_json  = json_encode($dataReceipt, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                //
+                //                 // по желанию: сбросить результат прошлой отправки (чтобы было видно новый прогон)
+                //                 $receipt->response_json = null;
+                //                 $receipt->error_text    = null;
+                //                 $receipt->ukassa_status = 'prepared'; // или 'draft' как у тебя принято
+                //
+                //                 $receipt->updated_at    = date('Y-m-d H:i:s');
+                //                 $receipt->save(false);
+                //             }
+                //
+                //             $receiptId = (int)$existingReceiptId;
+                //
+                //         }
+                //         else {
+                //             $metaReceipt = [
+                //                 'order_id'            => (int)($orderModel->id ?? 0),
+                //                 'moysklad_order_id'   => (string)($msOrder->id ?? ''),
+                //                 'moysklad_demand_id'  => (string)($demand->id ?? ''),
+                //                 'receipt_type'        => 'sale',
+                //                 'idempotency_key'     => CashRegister::uuidV4()
+                //             ];
+                //
+                //             $receiptId = CashRegister::createReceiptDraft($cashRegisterCode, $metaReceipt, $dataReceipt);
+                //         }
+                //
+                //         // 5) В ЛЮБОМ СЛУЧАЕ отправляем в UKassa
+                //         $sent = CashRegister::sendReceiptById((int)$receiptId, false);
+                //
+                //         // лог
+                //         file_put_contents(__DIR__ . '/../logs/ms_service/ukassa_receipt.txt',
+                //             "SEND receipt_id={$receiptId}\n" .
+                //             "RESULT=" . print_r($sent, true) . "\n----\n",
+                //             FILE_APPEND
+                //         );
+                //
+                //         $receiptLink = $sent['json']['data']['link'] ?? null;
+                //
+                //         if (!$receiptLink) {
+                //             file_put_contents(
+                //                 __DIR__ . '/../logs/ms_service/ukassa_receipt.txt',
+                //                 "NO RECEIPT LINK receipt_id={$receiptId}\n" .
+                //                 print_r($sent['json'], true) . "\n----\n",
+                //                 FILE_APPEND
+                //             );
+                //         }
+                //         else {
+                //           $attrs = $moysklad->buildDemandAttributePayload( '1ff6c2e8-1c3a-11ec-0a80-06650003408f', $receiptLink );
+                //           $moysklad->updateDemandAttributes((string)$demand->id, $attrs);
+                //         }
+                //
+                //     }
+                // }
 
                 // Если заказ Каспи, то нужно получить накладные и добавить их
                 if (in_array($msOrder->project->id, Yii::$app->params['moysklad']['kaspiProjects'], true)) {
@@ -435,7 +534,21 @@ class DemandUpdateHandler
                     FILE_APPEND
                 );
 
-                // 0) Идемпотентность по нашей БД: если уже есть возврат по этой отгрузке — повторно не создаём
+                /**
+                 * 0) needFiscal — включаем и для возврата
+                 *    (берём по отгрузке, как в ветке COLLECTED)
+                 */
+                $fiscalVal  = $moysklad->getAttributeValueId($demand, $ATTR_FISCAL_CHECK);
+                $needFiscal = ($fiscalVal === $ATTR_FISCAL_CHECK_YES);
+
+                file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
+                    "DO_RETURN fiscalVal=" . ($fiscalVal ?? 'NULL') . " needFiscal=" . ($needFiscal ? '1' : '0') . "\n",
+                    FILE_APPEND
+                );
+
+                /**
+                 * 1) Идемпотентность salesreturn по нашей БД
+                 */
                 $existingReturn = OrdersSalesReturns::find()
                     ->where([
                         'moysklad_order_id'  => (string)$msOrderId,
@@ -444,16 +557,16 @@ class DemandUpdateHandler
                     ->orderBy(['id' => SORT_DESC])
                     ->one();
 
-                if ($existingReturn && !empty($existingReturn->moysklad_salesreturn_id)) {
+                $srId = (string)($existingReturn->moysklad_salesreturn_id ?? '');
 
+                if ($srId !== '') {
                     file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
-                        "DO_RETURN SKIP (already exists) salesreturn={$existingReturn->moysklad_salesreturn_id}\n",
+                        "DO_RETURN SKIP (already exists) salesreturn={$srId}\n",
                         FILE_APPEND
                     );
-
                 } else {
 
-                    // 1) Создаём документ Возврат покупателя (salesreturn)
+                    // 2) Создаём salesreturn в МС
                     $resSr = $moysklad->createSalesReturnFromDemand($msOrder, $demand);
 
                     if (is_array($resSr) && empty($resSr['ok'])) {
@@ -475,24 +588,33 @@ class DemandUpdateHandler
                         continue;
                     }
 
-                    // 2) Пишем в таблицу acs43_orders_salesreturns
+                    // 3) Пишем/обновляем OrdersSalesReturns
                     $row = $existingReturn ?: new OrdersSalesReturns();
-                    $row->order_id               = (int)$orderModel->id;
-                    $row->moysklad_order_id      = (string)$msOrderId;
-                    $row->moysklad_demand_id     = (string)$demand->id;
-                    $row->moysklad_salesreturn_id= (string)$srId;
-                    $row->moysklad_state_id      = (string)$demandStateId;
-                    $row->salesreturn_state_id   = (string)($sr->state->meta->href ?? ''); // если хочешь хранить state id — лучше basename() ниже
-                    $row->created_at             = $row->created_at ?: date('Y-m-d H:i:s');
-                    $row->updated_at             = date('Y-m-d H:i:s');
+                    $row->order_id                = (int)$orderModel->id;
+                    $row->moysklad_order_id       = (string)$msOrderId;
+                    $row->moysklad_demand_id      = (string)$demand->id;
+                    $row->moysklad_salesreturn_id = (string)$srId;
+                    $row->moysklad_state_id       = (string)$demandStateId;
+
+                    // лучше хранить именно ID статуса, а не href
+                    $srStateHref = $sr->state->meta->href ?? null;
+                    $row->salesreturn_state_id = $srStateHref ? basename($srStateHref) : null;
+
+                    $row->created_at = $row->created_at ?: date('Y-m-d H:i:s');
+                    $row->updated_at = date('Y-m-d H:i:s');
                     $row->save(false);
 
                     file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
                         "SALESRETURN OK id={$srId} row_id={$row->id}\n",
                         FILE_APPEND
                     );
+                }
 
-                    // 3) Создаём чек возврата (пока логика чека отдельная “дилемма”, но каркас такой же как sale)
+                /**
+                 * 4) Чек возврата — ТОЛЬКО если needFiscal
+                 */
+                if ($needFiscal) {
+
                     $cashRegisterCode = $this->resolveCashRegisterCodeForOrder($msOrder);
 
                     if ($cashRegisterCode === '') {
@@ -500,129 +622,89 @@ class DemandUpdateHandler
                             "RETURN RECEIPT SKIP: cash_register empty demand={$demand->id}\n",
                             FILE_APPEND
                         );
+                    } else {
+
+                        // собрать payload
+                        $items = [];
+                        $totalSum = 0;
+
+                        $cashboxId = CashRegister::getCashboxIdByRegister($cashRegisterCode);
+                        $sectionId = CashRegister::getSectionIdByRegister($cashRegisterCode);
+
+                        foreach (($demand->positions->rows ?? []) as $pos) {
+                            $a = $pos->assortment ?? null;
+
+                            $name = (string)($a->name ?? 'Товар');
+                            $code = (string)($a->code ?? ($a->article ?? ''));
+                            if ($code === '') $code = 'MS-' . (string)($a->id ?? 'item');
+
+                            $qty  = (int)round((float)($pos->quantity ?? 1));
+                            $unit = (int)round(((int)($pos->price ?? 0)) / 100);
+
+                            $ntin = $moysklad->getProductAttribute($a->attributes,'594f2460-e4af-11f0-0a80-192e0037459c');
+                            $ntin = (!$ntin) ? '-' : $ntin->value;
+
+                            $lineTotal = $qty * $unit;
+                            $totalSum += $lineTotal;
+
+                            $items[] = [
+                                'name'         => $name,
+                                'price'        => $unit,
+                                'total_amount' => $lineTotal,
+                                'quantity'     => $qty,
+                                'is_nds'       => true,
+                                'ntin'         => $ntin,
+                                'section'      => $sectionId,
+                            ];
+                        }
+
+                        $dataReceipt = [
+                            'operation'    => Yii::$app->params['ukassa']['operationTypeReturn'], // sell_return
+                            'kassa'        => (int)$cashboxId,
+                            'payments'     => [[
+                                'payment_type' => 1,
+                                'total'        => $totalSum,
+                                'amount'       => $totalSum,
+                            ]],
+                            'items'        => $items,
+                            'total_amount' => $totalSum,
+                            'as_html'      => false,
+                        ];
+
+                        $metaReceipt = [
+                            'order_id'           => (int)($orderModel->id ?? 0),
+                            'moysklad_order_id'  => (string)($msOrder->id ?? ''),
+                            'moysklad_demand_id' => (string)($demand->id ?? ''),
+                            'receipt_type'       => 'return',
+                        ];
+
+                        // ⚠️ важно: только через upsert + guarded send
+                        $receiptId = CashRegister::upsertReceiptDraft($cashRegisterCode, $metaReceipt, $dataReceipt);
+                        $sent      = CashRegister::sendReceiptByIdGuarded((int)$receiptId, false);
+
+                        file_put_contents(__DIR__ . '/../logs/ms_service/ukassa_receipt.txt',
+                            "SEND RETURN receipt_id={$receiptId}\nRESULT=" . print_r($sent, true) . "\n----\n",
+                            FILE_APPEND
+                        );
+
+                        $receiptLink = $sent['json']['data']['link'] ?? null;
+
+                        if ($receiptLink) {
+                            // атрибут ссылки возвратного чека
+                            $attrs = $moysklad->buildDemandAttributePayload('2362f797-d068-11ec-0a80-0b8a00a44340', $receiptLink);
+                            $moysklad->updateDemandAttributes((string)$demand->id, $attrs);
+                        }
                     }
-                    else {
-                      // 2) Идемпотентность: если уже есть чек — НЕ создаём новый, а обновляем текущий и отправляем снова
-                      $existingReceiptId = OrdersReceipts::find()
-                          ->select(['id'])
-                          ->where([
-                              'moysklad_demand_id' => (string)$demand->id,
-                              'receipt_type'       => 'return',
-                              'cash_register'      => $cashRegisterCode,
-                          ])
-                          ->orderBy(['id' => SORT_DESC])
-                          ->scalar();
-
-                      // 3) Собираем items/payments ВСЕГДА (чтобы и обновление, и создание использовали одинаковый payload)
-                      $items = [];
-                      $totalSum = 0;
-
-                      $cashboxId = CashRegister::getCashboxIdByRegister($cashRegisterCode);
-                      $sectionId = CashRegister::getSectionIdByRegister($cashRegisterCode);
-                      foreach (($demand->positions->rows ?? []) as $pos) {
-                          $a = $pos->assortment ?? null;
-
-                          $name = (string)($a->name ?? 'Товар');
-                          $code = (string)($a->code ?? ($a->article ?? ''));
-                          if ($code === '') $code = 'MS-' . (string)($a->id ?? 'item');
-
-                          $qty  = (int)round((float)($pos->quantity ?? 1));
-                          $unit = (int)round(((int)($pos->price ?? 0)) / 100);
-
-                          $ntin = $moysklad->getProductAttribute($a->attributes,'594f2460-e4af-11f0-0a80-192e0037459c');
-                          $ntin = (!$ntin) ? '-' : $ntin->value;
-
-                          $lineTotal = $qty * $unit;
-                          $totalSum += $qty * $unit;
-
-                          $items[] = [
-                              'name'     => $name,
-                              'price'    => $unit,
-                              'total_amount' => $lineTotal,
-                              'quantity' => $qty,
-                              'is_nds'   => true,
-                              'ntin'     => $ntin,
-                              'section'  => $sectionId,
-                          ];
-                      }
-
-                      $dataReceipt = [
-                          'operation'    => YII::$app->params['ukassa']['operationTypeSell'],       // 'sell' / 'sell_return' (для возврата)
-                          'kassa'        => (int)$cashboxId,
-                          'payments'     => [
-                              [
-                                  'payment_type'  => 1,   // 'cash' | 'card' | ...
-                                  'total'         => $totalSum,
-                                  'amount'        => $totalSum
-                              ]
-                          ],
-                          'items'        => $items,
-                          'total_amount' => $totalSum,
-                          'as_html' => false
-                      ];
-
-                      // 4) Если чек уже есть — обновляем его запись, если нет — создаём черновик
-                      if ($existingReceiptId) {
-                          /** @var OrdersReceipts $receipt */
-                          $receipt = OrdersReceipts::findOne((int)$existingReceiptId);
-
-                          if ($receipt) {
-                              // обновляем payload
-                              $receipt->request_json  = json_encode($dataReceipt, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-
-                              // по желанию: сбросить результат прошлой отправки (чтобы было видно новый прогон)
-                              $receipt->response_json = null;
-                              $receipt->error_text    = null;
-                              $receipt->ukassa_status = 'prepared'; // или 'draft' как у тебя принято
-
-                              $receipt->updated_at    = date('Y-m-d H:i:s');
-                              $receipt->save(false);
-                          }
-
-                          $receiptId = (int)$existingReceiptId;
-
-                      }
-                      else {
-                          $metaReceipt = [
-                              'order_id'            => (int)($orderModel->id ?? 0),
-                              'moysklad_order_id'   => (string)($msOrder->id ?? ''),
-                              'moysklad_demand_id'  => (string)($demand->id ?? ''),
-                              'receipt_type'        => 'sale',
-                              'idempotency_key'     => CashRegister::uuidV4()
-                          ];
-
-                          $receiptId = CashRegister::createReceiptDraft($cashRegisterCode, $metaReceipt, $dataReceipt);
-                      }
-
-                      // 5) В ЛЮБОМ СЛУЧАЕ отправляем в UKassa
-                      $sent = CashRegister::sendReceiptById((int)$receiptId, false);
-
-                      // лог
-                      file_put_contents(__DIR__ . '/../logs/ms_service/ukassa_receipt.txt',
-                          "SEND RETURN receipt_id={$receiptId}\n" .
-                          "RESULT=" . print_r($sent, true) . "\n----\n",
-                          FILE_APPEND
-                      );
-
-                      $receiptLink = $sent['json']['data']['link'] ?? null;
-
-                      if (!$receiptLink) {
-                          file_put_contents(
-                              __DIR__ . '/../logs/ms_service/ukassa_receipt.txt',
-                              "NO RETURN RECEIPT LINK receipt_id={$receiptId}\n" .
-                              print_r($sent['json'], true) . "\n----\n",
-                              FILE_APPEND
-                          );
-                      }
-                      else {
-                        $attrs = $moysklad->buildDemandAttributePayload( '2362f797-d068-11ec-0a80-0b8a00a44340', $receiptLink );
-                        $moysklad->updateDemandAttributes((string)$demand->id, $attrs);
-                      }
-
-                    }
+                } else {
+                    file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
+                        "RETURN RECEIPT SKIP: needFiscal=0 demand={$demand->id}\n",
+                        FILE_APPEND
+                    );
                 }
 
-                // 4) Заказу ставим статус Возврат
+                /**
+                 * 5) Заказу ставим статус Возврат
+                 */
                 $resState = $moysklad->updateOrderState(
                     $msOrderId,
                     $moysklad->buildStateMeta('customerorder', $STATE_ORDER_RETURN_FINAL)
@@ -637,6 +719,11 @@ class DemandUpdateHandler
 
                 continue;
             }
+
+
+
+
+
 
 
             // Ветка "ЗАвершен"/"Закрыт"

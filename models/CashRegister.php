@@ -147,78 +147,163 @@ class CashRegister extends Model
      * DRAFT (DB)
      * ========================================================= */
 
-    public static function createReceiptDraft(
-       string $cashRegisterCode,
-       array $meta,
-       array $payload
-    ): int
-    {
-       if (empty($payload['operation'])) {
-           throw new \RuntimeException('operation is required');
-       }
-       if (empty($payload['kassa'])) {
-           $payload['kassa'] = $cashRegisterCode;
-       }
-       if (empty($payload['items'])) {
-           throw new \RuntimeException('items is required');
-       }
-       if (empty($payload['payments'])) {
-           throw new \RuntimeException('payments is required');
-       }
-       if (!isset($payload['total_amount'])) {
-           throw new \RuntimeException('total_amount is required');
-       }
+     public static function uuidV5(string $namespaceUuid, string $name): string
+     {
+         // namespaceUuid должен быть валидным UUID
+         $ns = str_replace(['-','{','}'], '', $namespaceUuid);
+         if (strlen($ns) !== 32) {
+             throw new \InvalidArgumentException('Invalid namespace UUID');
+         }
 
-       $meta['cash_register'] = $cashRegisterCode;
+         $nsBytes = hex2bin($ns);
+         $hash = sha1($nsBytes . $name, true); // 20 bytes
 
-       if (empty($meta['idempotency_key'])) {
-           $meta['idempotency_key'] = 'r_' . bin2hex(random_bytes(16));
-       }
+         $bytes = substr($hash, 0, 16);
 
-       return self::saveReceiptDraft($meta, $payload);
-    }
+         // version 5
+         $bytes[6] = chr((ord($bytes[6]) & 0x0f) | 0x50);
+         // variant RFC 4122
+         $bytes[8] = chr((ord($bytes[8]) & 0x3f) | 0x80);
 
-    public static function saveReceiptDraft(array $meta, array $payload): int
-    {
-        $idempotencyKey = (string)($meta['idempotency_key'] ?? '');
-        if ($idempotencyKey === '') {
-            throw new \RuntimeException('idempotency_key is required');
-        }
+         $hex = bin2hex($bytes);
+         return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split($hex, 4));
+     }
 
-        // быстрее, чем ->one()
-        if (OrdersReceipts::find()->where(['idempotency_key' => $idempotencyKey])->exists()) {
-            $row = OrdersReceipts::find()->select(['id'])->where(['idempotency_key' => $idempotencyKey])->one();
-            return (int)$row->id;
-        }
+     public static function stableUkassaUuid(string $demandId, string $cashRegister, string $receiptType): string
+     {
+         // фиксированный namespace (можешь свой постоянный uuid)
+         $namespace = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
 
-        $now = date('Y-m-d H:i:s');
+         $name = $demandId . '|' . $cashRegister . '|' . $receiptType;
 
-        $row = new OrdersReceipts();
+         return self::uuidV5($namespace, $name);
+     }
 
-        $row->order_id           = isset($meta['order_id']) ? (int)$meta['order_id'] : null;
-        $row->moysklad_order_id  = (string)($meta['moysklad_order_id'] ?? null);
-        $row->moysklad_demand_id = (string)($meta['moysklad_demand_id'] ?? null);
+     public static function sendReceiptByIdGuarded(int $receiptId, bool $dryRun = true): array
+     {
+         $receipt = OrdersReceipts::findOne($receiptId);
+         if (!$receipt) throw new \RuntimeException("Receipt not found: {$receiptId}");
 
-        $row->cash_register   = (string)($meta['cash_register'] ?? '');
-        $row->receipt_type    = (string)($meta['receipt_type'] ?? 'sale'); // sale|return
-        $row->idempotency_key = $idempotencyKey;
+         // уже напечатан/успешен — не шлём
+         if (!empty($receipt->ukassa_ticket_number) || $receipt->ukassa_status === 'sent') {
+             return [
+                 'ok' => true,
+                 'skipped' => true,
+                 'reason' => 'already_sent',
+                 'receipt_id' => $receiptId,
+             ];
+         }
 
-        $row->ukassa_receipt_id    = null;
-        $row->ukassa_ticket_number = null;
-        $row->ukassa_status        = null;
+         // atomic-guard: только один поток может поставить sending
+         $affected = OrdersReceipts::updateAll(
+             ['ukassa_status' => 'sending', 'updated_at' => date('Y-m-d H:i:s')],
+             [
+                 'and',
+                 ['id' => $receiptId],
+                 ['not in', 'ukassa_status', ['sending', 'sent']],
+             ]
+         );
 
-        $row->request_json  = json_encode($payload, JSON_UNESCAPED_UNICODE);
-        $row->response_json = null;
-        $row->error_text    = null;
+         if ($affected === 0) {
+             return [
+                 'ok' => true,
+                 'skipped' => true,
+                 'reason' => 'already_sending_or_sent',
+                 'receipt_id' => $receiptId,
+             ];
+         }
 
-        $row->printed_at = null;
-        $row->created_at = $now;
-        $row->updated_at = $now;
+         // дальше вызываем твой sendReceiptById (но он сейчас сам пишет status sent/error)
+         return self::sendReceiptById($receiptId, $dryRun);
+     }
 
-        $row->save(false);
+     public static function upsertReceiptDraft(string $cashRegisterCode, array $meta, array $payload): int
+     {
+         $meta['cash_register'] = $cashRegisterCode;
 
-        return (int)$row->id;
-    }
+         // idempotency_key должен быть UUID и СТАБИЛЬНЫЙ для этой операции
+         // (иначе UKassa будет создавать новый чек при повторе)
+         if (empty($meta['idempotency_key'])) {
+             $meta['idempotency_key'] = self::stableUkassaUuid(
+                 (string)($meta['moysklad_demand_id'] ?? ''),
+                 $cashRegisterCode,
+                 (string)($meta['receipt_type'] ?? 'sale')
+             );
+         }
+
+         $now = date('Y-m-d H:i:s');
+
+         // 1) пробуем найти существующий
+         $existingId = OrdersReceipts::find()
+             ->select(['id'])
+             ->where([
+                 'moysklad_demand_id' => (string)($meta['moysklad_demand_id'] ?? ''),
+                 'cash_register'      => $cashRegisterCode,
+                 'receipt_type'       => (string)($meta['receipt_type'] ?? 'sale'),
+             ])
+             ->orderBy(['id' => SORT_DESC])
+             ->scalar();
+
+         if ($existingId) {
+             $row = OrdersReceipts::findOne((int)$existingId);
+
+             // если уже напечатан — payload не трогаем (иначе будет путаница)
+             if (!empty($row->ukassa_ticket_number) || $row->ukassa_status === 'sent') {
+                 return (int)$row->id;
+             }
+
+             $row->request_json  = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+             $row->response_json = null;
+             $row->error_text    = null;
+             $row->ukassa_status = 'prepared';
+             $row->updated_at    = $now;
+             $row->save(false);
+
+             return (int)$row->id;
+         }
+
+         // 2) иначе создаём (и ловим уникальность при гонке)
+         $row = new OrdersReceipts();
+         $row->order_id           = isset($meta['order_id']) ? (int)$meta['order_id'] : null;
+         $row->moysklad_order_id  = (string)($meta['moysklad_order_id'] ?? null);
+         $row->moysklad_demand_id = (string)($meta['moysklad_demand_id'] ?? null);
+         $row->cash_register      = $cashRegisterCode;
+         $row->receipt_type       = (string)($meta['receipt_type'] ?? 'sale');
+         $row->idempotency_key    = (string)$meta['idempotency_key'];
+
+         $row->ukassa_receipt_id    = null;
+         $row->ukassa_ticket_number = null;
+         $row->ukassa_status        = 'prepared';
+         $row->total_amount         = 0;
+
+         $row->request_json  = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+         $row->response_json = null;
+         $row->error_text    = null;
+
+         $row->printed_at = null;
+         $row->created_at = $now;
+         $row->updated_at = $now;
+
+         try {
+             $row->save(false);
+             return (int)$row->id;
+         } catch (\Throwable $e) {
+             // гонка: запись уже создали
+             $id = OrdersReceipts::find()
+                 ->select(['id'])
+                 ->where([
+                     'moysklad_demand_id' => (string)($meta['moysklad_demand_id'] ?? ''),
+                     'cash_register'      => $cashRegisterCode,
+                     'receipt_type'       => (string)($meta['receipt_type'] ?? 'sale'),
+                 ])
+                 ->orderBy(['id' => SORT_DESC])
+                 ->scalar();
+
+             if ($id) return (int)$id;
+
+             throw $e;
+         }
+     }
 
     /* =========================================================
      * SEND (DRY RUN / REAL)

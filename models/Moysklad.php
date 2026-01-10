@@ -1363,6 +1363,10 @@ class Moysklad extends Model
         continue;
       }
 
+      if ($c === false || $c === null) {
+        continue;
+      }
+
       switch($ckey){
         case 'id':
         case 'project':
@@ -1457,8 +1461,6 @@ class Moysklad extends Model
       }
     }
 
-file_put_contents(__DIR__ . '/../logs/ms_service/updatecustomerorder.txt', PHP_EOL . PHP_EOL . 'UPDATEORDERWITHCONFIG: ' . print_r($data,true) . PHP_EOL . PHP_EOL, FILE_APPEND);
-
     $ch = curl_init('https://api.moysklad.ru/api/remap/1.2/entity/customerorder/' . $orderId . '?expand=agent,project,organization,store,state,positions,attributes');
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "PUT");
@@ -1471,8 +1473,6 @@ file_put_contents(__DIR__ . '/../logs/ms_service/updatecustomerorder.txt', PHP_E
         "Content-Type: application/json"
     ]);
     $response = curl_exec($ch);
-
-    file_put_contents(__DIR__ . '/../logs/ms_service/createcustomerorder.txt',print_r($data,true) . PHP_EOL, FILE_APPEND);
 
     curl_close($ch);
     if (curl_errno($ch)) {
