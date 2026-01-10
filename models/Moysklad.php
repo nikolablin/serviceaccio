@@ -1735,8 +1735,6 @@ class Moysklad extends Model
       $code  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
       curl_close($ch);
 
-      file_put_contents(__DIR__ . '/../logs/ms_service/updatecustomerorder.txt','RESPONSE::' . print_r($response,true) . PHP_EOL, FILE_APPEND);
-
       if ($errNo || $code < 200 || $code >= 300) {
           file_put_contents(__DIR__ . '/../logs/ms_service/createcustomerorder.txt',
               "DEMAND POST error. HTTP={$code} ERR={$err}\nResp={$response}\nPayload=" . print_r($payload,true) . "\n\n",

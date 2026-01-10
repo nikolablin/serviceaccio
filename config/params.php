@@ -92,6 +92,7 @@ return [
 
       'channelAttrId' => '45bdad04-68d6-11ee-0a80-095d000776da', // ☎️ Каналы связи
       'paymentTypeAttrId' => '19fb8dcf-94ac-11ed-0a80-0e930023e914',
+      'demandPaymentTypeAttrId' => 'b4b6c6d6-836d-11ed-0a80-07fe00347b40',
       'configFallbackByPaymentType' => false, // по желанию
       'kaspiProjects' => [
         'accio' => '5f351348-d269-11f0-0a80-15120016d622', // 🔴 Kaspi Accio

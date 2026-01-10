@@ -236,6 +236,24 @@ class CustomerOrderUpdateHandler
                 $reserve->created_at = date('Y-m-d H:i:s');
                 $reserve->updated_at = date('Y-m-d H:i:s');
                 $reserve->save(false);
+
+                $demand = $moysklad->upsertDemandFromOrder(
+                    $order,
+                    $orderId,
+                    $configData,
+                    ['sync_positions' => true]
+                );
+
+                if ($demand && !empty($demand->id)) {
+                    $link->moysklad_demand_id = (string)$demand->id;
+                    $link->updated_at = date('Y-m-d H:i:s');
+                    $link->save(false);
+                } else {
+                  file_put_contents(__DIR__ . '/../logs/ms_service/updatecustomerorder.txt',
+                      "DEMAND CREATE FAIL order={$order->id}\n" . print_r($demand,true)."\n",
+                      FILE_APPEND
+                  );
+                }
             }
         }
 
