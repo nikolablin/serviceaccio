@@ -176,7 +176,8 @@ class CashRegister extends Model
 
          $name = $demandId . '|' . $cashRegister . '|' . $receiptType;
 
-         return self::uuidV5($namespace, $name);
+         return self::uuidV4();
+         // return self::uuidV5($namespace, $name);
      }
 
      public static function sendReceiptByIdGuarded(int $receiptId, bool $dryRun = true): array

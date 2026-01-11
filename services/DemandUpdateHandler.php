@@ -145,6 +145,10 @@ class DemandUpdateHandler
             $link->save(false);
 
 
+            file_put_contents( __DIR__ . '/../logs/ms_service/updatedemand.txt', 'TEST1:::' . print_r($demandStateId,true) . PHP_EOL, FILE_APPEND );
+            file_put_contents( __DIR__ . '/../logs/ms_service/updatedemand.txt', 'TEST2:::' . print_r($STATE_DEMAND_COLLECTED,true) . PHP_EOL, FILE_APPEND );
+
+
             // Ветка: Отгрузка “Собран”
             if ($demandStateId === $STATE_DEMAND_COLLECTED) {
 
@@ -156,6 +160,8 @@ class DemandUpdateHandler
                     "COLLECTED demand={$demand->id} order={$msOrderId} fiscalVal=" . ($fiscalVal ?? 'NULL') . " needFiscal=" . ($needFiscal ? '1':'0') . "\n",
                     FILE_APPEND
                 );
+
+                file_put_contents( __DIR__ . '/../logs/ms_service/updatedemand.txt', 'TEST3:::' . print_r($needFiscal,true) . PHP_EOL, FILE_APPEND );
 
                 if ($needFiscal) {
 
@@ -178,9 +184,21 @@ class DemandUpdateHandler
                     $cashboxId = CashRegister::getCashboxIdByRegister($cashRegisterCode);
                     $sectionId = CashRegister::getSectionIdByRegister($cashRegisterCode);
 
+                    file_put_contents( __DIR__ . '/../logs/ms_service/updatedemand.txt', 'TEST4:::' . print_r($cashboxId,true) . PHP_EOL, FILE_APPEND );
+                    file_put_contents( __DIR__ . '/../logs/ms_service/updatedemand.txt', 'TEST5:::' . print_r($sectionId,true) . PHP_EOL, FILE_APPEND );
+
                     $paymentAttrId            = Yii::$app->params['moysklad']['demandPaymentTypeAttrId'] ?? null;
+
+                    file_put_contents( __DIR__ . '/../logs/ms_service/updatedemand.txt', 'TEST6:::' . print_r($paymentAttrId,true) . PHP_EOL, FILE_APPEND );
+
                     $paymentTypeId            = $paymentAttrId ? $moysklad->getAttributeValueId($demand, $paymentAttrId) : null;
-                    $cashRegisterPaymentType  = ($paymentTypeId === (Yii::$app->params['moysklad']['cashPaymentTypeId'] ? 0 : 1));
+
+                    file_put_contents( __DIR__ . '/../logs/ms_service/updatedemand.txt', 'PAYMENT_DATA:::' . print_r($paymentTypeId,true) . PHP_EOL, FILE_APPEND );
+
+                    $isCash = ($paymentTypeId === (Yii::$app->params['moysklad']['cashPaymentTypeId'] ?? ''));
+                    $cashRegisterPaymentType = $isCash ? 0 : 1;
+
+                    file_put_contents( __DIR__ . '/../logs/ms_service/updatedemand.txt', 'PAYMENT_DATA:::' . print_r($cashRegisterPaymentType,true) . PHP_EOL, FILE_APPEND );
 
                     foreach (($demand->positions->rows ?? []) as $pos) {
                         $a = $pos->assortment ?? null;
