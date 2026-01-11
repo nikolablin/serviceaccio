@@ -12,6 +12,7 @@ use app\models\Telegram;
 use app\models\Whatsapp;
 use app\models\KaspiOrders;
 use app\models\OrdersConfigTable;
+use app\models\CashRegister;
 
 class CronController extends Controller
 {
@@ -399,5 +400,19 @@ class CronController extends Controller
 
       }
 
+    }
+
+    public function actionCloseshifts()
+    {
+      $cashregisters = YII::$app->params['ukassa']['accounts'];
+
+      foreach ($cashregisters as $cashregister => $data) {
+        $res = CashRegister::closeZShiftAndSave($cashregister);
+      }
+
+
+      // if (!$res['ok']) {
+      //     // лог уже сохранён в БД
+      // }
     }
 }

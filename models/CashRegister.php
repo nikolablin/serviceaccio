@@ -3,6 +3,7 @@ namespace app\models;
 
 use Yii;
 use yii\base\Model;
+use app\models\CashRegisterShifts;
 
 class CashRegister extends Model
 {
@@ -176,8 +177,7 @@ class CashRegister extends Model
 
          $name = $demandId . '|' . $cashRegister . '|' . $receiptType;
 
-         return self::uuidV4();
-         // return self::uuidV5($namespace, $name);
+         return self::uuidV5($namespace, $name);
      }
 
      public static function sendReceiptByIdGuarded(int $receiptId, bool $dryRun = true): array
@@ -222,19 +222,9 @@ class CashRegister extends Model
      {
          $meta['cash_register'] = $cashRegisterCode;
 
-         // idempotency_key должен быть UUID и СТАБИЛЬНЫЙ для этой операции
-         // (иначе UKassa будет создавать новый чек при повторе)
-         if (empty($meta['idempotency_key'])) {
-             $meta['idempotency_key'] = self::stableUkassaUuid(
-                 (string)($meta['moysklad_demand_id'] ?? ''),
-                 $cashRegisterCode,
-                 (string)($meta['receipt_type'] ?? 'sale')
-             );
-         }
-
          $now = date('Y-m-d H:i:s');
+         $newJson = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-         // 1) пробуем найти существующий
          $existingId = OrdersReceipts::find()
              ->select(['id'])
              ->where([
@@ -246,38 +236,52 @@ class CashRegister extends Model
              ->scalar();
 
          if ($existingId) {
+             /** @var OrdersReceipts $row */
              $row = OrdersReceipts::findOne((int)$existingId);
+             if (!$row) return (int)$existingId;
 
-             // если уже напечатан — payload не трогаем (иначе будет путаница)
+             // ✅ если уже успешный — выходим
              if (!empty($row->ukassa_ticket_number) || $row->ukassa_status === 'sent') {
                  return (int)$row->id;
              }
 
-             $row->request_json  = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-             $row->response_json = null;
-             $row->error_text    = null;
-             $row->ukassa_status = 'prepared';
-             $row->updated_at    = $now;
-             $row->save(false);
+             $oldJson = (string)$row->request_json;
+             $alreadyTried = !empty($row->response_json) || in_array($row->ukassa_status, ['sending','error'], true);
 
-             return (int)$row->id;
+             // ⚠️ если уже пытались отправлять и payload изменился — создаём НОВУЮ запись (и новый v4 ключ)
+             if ($alreadyTried && $oldJson !== '' && $oldJson !== $newJson) {
+                 // создаём новую
+             } else {
+                 // ✅ можно обновить существующую запись БЕЗ смены idempotency_key
+                 $row->request_json  = $newJson;
+                 $row->response_json = null;
+                 $row->error_text    = null;
+                 $row->ukassa_status = 'prepared';
+                 $row->updated_at    = $now;
+                 $row->save(false);
+                 return (int)$row->id;
+             }
          }
 
-         // 2) иначе создаём (и ловим уникальность при гонке)
+         // --- CREATE NEW RECORD ---
          $row = new OrdersReceipts();
          $row->order_id           = isset($meta['order_id']) ? (int)$meta['order_id'] : null;
          $row->moysklad_order_id  = (string)($meta['moysklad_order_id'] ?? null);
          $row->moysklad_demand_id = (string)($meta['moysklad_demand_id'] ?? null);
          $row->cash_register      = $cashRegisterCode;
          $row->receipt_type       = (string)($meta['receipt_type'] ?? 'sale');
-         $row->idempotency_key    = (string)$meta['idempotency_key'];
+
+         // ✅ ТОЛЬКО v4
+         $row->idempotency_key    = !empty($meta['idempotency_key'])
+             ? (string)$meta['idempotency_key']
+             : self::uuidV4();
 
          $row->ukassa_receipt_id    = null;
          $row->ukassa_ticket_number = null;
          $row->ukassa_status        = 'prepared';
          $row->total_amount         = 0;
 
-         $row->request_json  = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+         $row->request_json  = $newJson;
          $row->response_json = null;
          $row->error_text    = null;
 
@@ -285,26 +289,118 @@ class CashRegister extends Model
          $row->created_at = $now;
          $row->updated_at = $now;
 
-         try {
-             $row->save(false);
-             return (int)$row->id;
-         } catch (\Throwable $e) {
-             // гонка: запись уже создали
-             $id = OrdersReceipts::find()
-                 ->select(['id'])
-                 ->where([
-                     'moysklad_demand_id' => (string)($meta['moysklad_demand_id'] ?? ''),
-                     'cash_register'      => $cashRegisterCode,
-                     'receipt_type'       => (string)($meta['receipt_type'] ?? 'sale'),
-                 ])
-                 ->orderBy(['id' => SORT_DESC])
-                 ->scalar();
-
-             if ($id) return (int)$id;
-
-             throw $e;
-         }
+         $row->save(false);
+         return (int)$row->id;
      }
+
+
+     // public static function upsertReceiptDraft(string $cashRegisterCode, array $meta, array $payload): int
+     // {
+     //     $meta['cash_register'] = $cashRegisterCode;
+     //
+     //     // idempotency_key должен быть UUID и СТАБИЛЬНЫЙ для этой операции
+     //     // (иначе UKassa будет создавать новый чек при повторе)
+     //     if (empty($meta['idempotency_key'])) {
+     //         $meta['idempotency_key'] = self::stableUkassaUuid(
+     //             (string)($meta['moysklad_demand_id'] ?? ''),
+     //             $cashRegisterCode,
+     //             (string)($meta['receipt_type'] ?? 'sale')
+     //         );
+     //     }
+     //
+     //     $now = date('Y-m-d H:i:s');
+     //
+     //     // 1) пробуем найти существующий
+     //     $existingId = OrdersReceipts::find()
+     //         ->select(['id'])
+     //         ->where([
+     //             'moysklad_demand_id' => (string)($meta['moysklad_demand_id'] ?? ''),
+     //             'cash_register'      => $cashRegisterCode,
+     //             'receipt_type'       => (string)($meta['receipt_type'] ?? 'sale'),
+     //         ])
+     //         ->orderBy(['id' => SORT_DESC])
+     //         ->scalar();
+     //
+     //     if ($existingId) {
+     //         $row = OrdersReceipts::findOne((int)$existingId);
+     //
+     //         // если уже напечатан — payload не трогаем (иначе будет путаница)
+     //         if (!empty($row->ukassa_ticket_number) || $row->ukassa_status === 'sent') {
+     //             return (int)$row->id;
+     //         }
+     //
+     //         $newJson = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+     //         $oldJson = (string)$row->request_json;
+     //
+     //         $alreadyTried = !empty($row->response_json) || in_array($row->ukassa_status, ['sending','error'], true);
+     //
+     //         if ($alreadyTried && $oldJson !== '' && $oldJson !== $newJson) {
+     //             // создаём новую запись, новый ключ
+     //             $meta['idempotency_key'] = self::uuidV4(); // или uuidV5(namespace, demand|cash|type|sha1($newJson))
+     //             unset($existingId); // принудительно пойдём в ветку создания ниже
+     //         } else {
+     //             // можно безопасно обновить (ещё не отправляли, или payload тот же)
+     //             $row->request_json  = $newJson;
+     //             $row->response_json = null;
+     //             $row->error_text    = null;
+     //             $row->ukassa_status = 'prepared';
+     //             $row->updated_at    = $now;
+     //             $row->save(false);
+     //             return (int)$row->id;
+     //         }
+     //
+     //         $row->request_json  = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+     //         $row->response_json = null;
+     //         $row->error_text    = null;
+     //         $row->ukassa_status = 'prepared';
+     //         $row->updated_at    = $now;
+     //         $row->save(false);
+     //
+     //         return (int)$row->id;
+     //     }
+     //
+     //     // 2) иначе создаём (и ловим уникальность при гонке)
+     //     $row = new OrdersReceipts();
+     //     $row->order_id           = isset($meta['order_id']) ? (int)$meta['order_id'] : null;
+     //     $row->moysklad_order_id  = (string)($meta['moysklad_order_id'] ?? null);
+     //     $row->moysklad_demand_id = (string)($meta['moysklad_demand_id'] ?? null);
+     //     $row->cash_register      = $cashRegisterCode;
+     //     $row->receipt_type       = (string)($meta['receipt_type'] ?? 'sale');
+     //     $row->idempotency_key    = (string)$meta['idempotency_key'];
+     //
+     //     $row->ukassa_receipt_id    = null;
+     //     $row->ukassa_ticket_number = null;
+     //     $row->ukassa_status        = 'prepared';
+     //     $row->total_amount         = 0;
+     //
+     //     $row->request_json  = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+     //     $row->response_json = null;
+     //     $row->error_text    = null;
+     //
+     //     $row->printed_at = null;
+     //     $row->created_at = $now;
+     //     $row->updated_at = $now;
+     //
+     //     try {
+     //         $row->save(false);
+     //         return (int)$row->id;
+     //     } catch (\Throwable $e) {
+     //         // гонка: запись уже создали
+     //         $id = OrdersReceipts::find()
+     //             ->select(['id'])
+     //             ->where([
+     //                 'moysklad_demand_id' => (string)($meta['moysklad_demand_id'] ?? ''),
+     //                 'cash_register'      => $cashRegisterCode,
+     //                 'receipt_type'       => (string)($meta['receipt_type'] ?? 'sale'),
+     //             ])
+     //             ->orderBy(['id' => SORT_DESC])
+     //             ->scalar();
+     //
+     //         if ($id) return (int)$id;
+     //
+     //         throw $e;
+     //     }
+     // }
 
     /* =========================================================
      * SEND (DRY RUN / REAL)
@@ -520,23 +616,77 @@ class CashRegister extends Model
 
     public static function getDepartmentData($cashboxNum)
     {
-     $cashboxId = self::getCashboxIdByRegister($cashboxNum);
-     $token     = self::getUkassaTokenByCashRegister($cashboxNum);
-     $url       = self::ukassaUrl('departmentPath', '/api/department/');
+      $cashboxId = self::getCashboxIdByRegister($cashboxNum);
+      $token     = self::getUkassaTokenByCashRegister($cashboxNum);
+      $url       = self::ukassaUrl('departmentPath', '/api/department/');
 
-     $res = self::ukassaGetJson(
+      $res = self::ukassaGetJson(
         $url,
         [
             'Authorization: Token ' . $token,
             'Content-Type: application/json'
         ],
         true // если нужны response headers
-    );
+      );
 
-    if (!$res['ok']) {
+      if (!$res['ok']) {
         throw new \RuntimeException(
             "UKassa GET failed http={$res['code']} err={$res['err']} body={$res['raw']}"
         );
+      }
     }
+
+    public static function closeZShiftAndSave(string $cashRegisterCode): array
+    {
+        $cashboxId = self::getCashboxIdByRegister($cashRegisterCode);
+        if (!$cashboxId) {
+            throw new \RuntimeException("Cashbox not found: {$cashRegisterCode}");
+        }
+
+        $token = self::getUkassaTokenByCashRegister($cashRegisterCode);
+
+        $url = self::ukassaUrl('kassaPath', '/api/kassa/close_z_shift/');
+
+        $payload = [
+            'kassa'     => (int)$cashboxId,
+            'html_code' => false,
+        ];
+
+        $headers = [
+            'Authorization: Token ' . $token,
+            'Accept: application/json',
+            'Content-Type: application/json',
+        ];
+
+        $now = date('Y-m-d H:i:s');
+
+        $res = self::ukassaPostJson($url, $payload, $headers, false);
+
+        // ⬇️ сохраняем ВСЕГДА
+        $row = new CashRegisterShifts();
+        $row->cash_register = $cashRegisterCode;
+        $row->kassa_id      = (int)$cashboxId;
+        $row->requested_at  = $now;
+        $row->created_at    = $now;
+        $row->updated_at    = $now;
+
+        $row->request_json  = json_encode($payload, JSON_UNESCAPED_UNICODE);
+        $row->response_json = $res['raw'] ?? null;
+
+        if (!empty($res['ok'])) {
+            $data = $res['json']['data'] ?? [];
+
+            $row->z_shift_number = $data['z_shift'] ?? null;
+            $row->closed_at      = $data['closed_at'] ?? $now;
+            $row->status         = 'closed';
+        } else {
+            $row->status     = 'error';
+            $row->error_text = "http={$res['code']} err={$res['err']}";
+        }
+
+        $row->save(false);
+
+        return $res;
     }
+
 }

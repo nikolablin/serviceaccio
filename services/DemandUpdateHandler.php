@@ -145,8 +145,8 @@ class DemandUpdateHandler
             $link->save(false);
 
 
-            file_put_contents( __DIR__ . '/../logs/ms_service/updatedemand.txt', 'TEST1:::' . print_r($demandStateId,true) . PHP_EOL, FILE_APPEND );
-            file_put_contents( __DIR__ . '/../logs/ms_service/updatedemand.txt', 'TEST2:::' . print_r($STATE_DEMAND_COLLECTED,true) . PHP_EOL, FILE_APPEND );
+            file_put_contents( __DIR__ . '/../logs/ms_service/updatedemand.txt', 'demandStateId:::' . print_r($demandStateId,true) . PHP_EOL, FILE_APPEND );
+            file_put_contents( __DIR__ . '/../logs/ms_service/updatedemand.txt', 'STATE_DEMAND_COLLECTED:::' . print_r($STATE_DEMAND_COLLECTED,true) . PHP_EOL, FILE_APPEND );
 
 
             // Ветка: Отгрузка “Собран”
