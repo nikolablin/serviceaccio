@@ -13,6 +13,8 @@ use yii\bootstrap5\Modal;
 use yii\widgets\ActiveForm;
 use yii\web\YiiAsset;
 use yii\helpers\Url;
+use app\models\System;
+
 YiiAsset::register($this);
 AppAsset::register($this);
 
@@ -24,6 +26,8 @@ $this->registerMetaTag(['name' => 'keywords', 'content' => $this->params['meta_k
 $this->registerLinkTag(['rel' => 'icon', 'type' => 'image/x-icon', 'href' => Yii::getAlias('@web/favicon.ico')]);
 
 $userGroup = Yii::$app->user->identity->group->id ?? null;
+
+$serverSpace = System::getFreeSpace();
 ?>
 <?php $this->beginPage() ?>
 <!DOCTYPE html>
@@ -39,6 +43,19 @@ $userGroup = Yii::$app->user->identity->group->id ?? null;
     <header>
       <div>
         <div class="logotype"><span></span></div>
+        <?php
+        switch(Yii::$app->user->isGuest){
+          case false:
+          ?>
+          <div class="space">
+            <strong>Место на сервере:</strong><br>
+            Свободно: <?= System::formatBytes($serverSpace->free) ?><br>
+            Использовано: <?= System::formatBytes($serverSpace->used) ?><br>
+            Всего: <?= System::formatBytes($serverSpace->total) ?>
+          </div>
+          <?php
+          }
+        ?>
         <div class="account" data-guest="<?=((string)Yii::$app->user->isGuest);?>">
           <?php
           switch(Yii::$app->user->isGuest){

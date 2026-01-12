@@ -9,7 +9,7 @@ class MediaAsset extends AssetBundle
     public $baseUrl  = '@web';
 
     public $js = [
-      'js/media.js?v=1.1',
+      'js/media.js?v=1.2',
     ];
 
     public $depends = [
