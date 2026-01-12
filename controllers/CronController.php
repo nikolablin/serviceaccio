@@ -402,6 +402,10 @@ class CronController extends Controller
 
     }
 
+    /*
+    Закрытие смен всех касс.
+    Функция есть, но нигде не включена.
+    */
     public function actionCloseshifts()
     {
       $cashregisters = YII::$app->params['ukassa']['accounts'];
@@ -409,10 +413,5 @@ class CronController extends Controller
       foreach ($cashregisters as $cashregister => $data) {
         $res = CashRegister::closeZShiftAndSave($cashregister);
       }
-
-
-      // if (!$res['ok']) {
-      //     // лог уже сохранён в БД
-      // }
     }
 }

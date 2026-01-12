@@ -19,10 +19,15 @@ use app\models\SignupForm;
 use app\models\MarketingReportTable;
 use app\models\CpcProjectsTable;
 use app\models\OrdersConfig;
+use app\models\MediaUploadForm;
+use app\models\MediaCategory;
+use app\models\MediaFile;
 use yii\helpers\ArrayHelper;
 use app\assets\AccountmentAsset;
 use app\assets\OrdersConfigAsset;
 use app\assets\ReportsAsset;
+use yii\web\UploadedFile;
+use yii\data\ActiveDataProvider;
 
 class SiteController extends Controller
 {
@@ -200,8 +205,84 @@ class SiteController extends Controller
       return $this->render('ordersconfig',[ 'references' => $references ]);
     }
 
-    public function actionTest()
+
+    public function actionMediamanager()
     {
-      return $this->render('test');
+      $this->getView()->registerAssetBundle(\app\assets\MediaAsset::class);
+
+      $model = new \app\models\MediaUploadForm();
+
+      $categories = MediaCategory::find()
+          ->select(['name', 'id'])
+          ->orderBy(['name' => SORT_ASC])
+          ->indexBy('id')
+          ->column();
+
+      if (Yii::$app->request->isPost) {
+          if ($model->load(Yii::$app->request->post())) {
+
+              $model->file = UploadedFile::getInstance($model, 'file');
+
+              // ✅ Создание категории "на лету"
+              if (!empty($model->new_category)) {
+                  $catName = trim($model->new_category);
+
+                  // чтобы не плодить дубликаты
+                  $cat = MediaCategory::find()->where(['name' => $catName])->one();
+
+                  if (!$cat) {
+                      $cat = new MediaCategory();
+                      $cat->name = $catName;
+
+                      if (!$cat->save()) {
+                          $model->addError('new_category', implode('; ', $cat->getFirstErrors()));
+                      }
+                  }
+
+                  if ($cat && !$cat->hasErrors()) {
+                      $model->category_id = (int)$cat->id; // выбираем созданную
+                  }
+              }
+
+              // ✅ если не было ошибок по категории — грузим файл и пишем в media_file
+              if (!$model->hasErrors() && $model->uploadAndCreate()) {
+                  Yii::$app->session->setFlash('success', 'Файл добавлен.');
+                  return $this->refresh();
+              }
+
+              // обновим список категорий, чтобы новая появилась в dropdown после ошибки/успеха
+              $categories = MediaCategory::find()
+                  ->select(['name', 'id'])
+                  ->orderBy(['name' => SORT_ASC])
+                  ->indexBy('id')
+                  ->column();
+          }
+      }
+
+      $dataProvider = new ActiveDataProvider([
+          'query' => MediaFile::find()->with('category'), // <-- БЕЗ orderBy()
+          'pagination' => ['pageSize' => 25],
+          'sort' => [
+              'defaultOrder' => ['id' => SORT_DESC], // сортировка по умолчанию
+              'attributes' => [
+                  'id',
+                  'title',
+                  'file_type',
+                  'created_at',
+              ],
+          ],
+      ]);
+
+      // dataProvider для списка файлов оставь как у тебя
+      return $this->render('mediamanager', [
+          'model' => $model,
+          'categories' => $categories,
+          'dataProvider' => $dataProvider, // если у тебя он есть
+      ]);
     }
+
+    // public function actionTest()
+    // {
+    //   return $this->render('test');
+    // }
 }

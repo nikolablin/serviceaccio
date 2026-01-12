@@ -78,6 +78,9 @@ $userGroup = Yii::$app->user->identity->group->id ?? null;
             if(in_array($userGroup,[1,2])){
               $menuItems[] = ['label' => 'Конфигурация заказов', 'url' => ['/ordersconfig'], 'active' => $this->context->route == 'site/ordersconfig'];
             }
+            if(in_array($userGroup,[1,2])){
+              $menuItems[] = ['label' => 'Медиаменеджер', 'url' => ['/mediamanager'], 'active' => $this->context->route == 'site/mediamanager'];
+            }
             echo Nav::widget([
                   'items' => $menuItems,
                   'options' => ['class' => ''],
@@ -98,6 +101,20 @@ $userGroup = Yii::$app->user->identity->group->id ?? null;
     </footer>
 
     <?php $this->endBody() ?>
+  </div>
+
+  <div class="toast-container position-fixed top-0 start-50 translate-middle-x p-3"
+       style="z-index:1100;">
+      <div id="copyToast"
+           class="toast align-items-center text-bg-success border-0"
+           role="alert">
+          <div class="d-flex">
+              <div class="toast-body"></div>
+              <button type="button"
+                      class="btn-close btn-close-white me-2 m-auto"
+                      data-bs-dismiss="toast"></button>
+          </div>
+      </div>
   </div>
 </body>
 </html>

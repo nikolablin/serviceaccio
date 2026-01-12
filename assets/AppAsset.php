@@ -22,7 +22,8 @@ class AppAsset extends AssetBundle
     public $css = [
         'css/fonts.css',
         'css/site.css?v=1.5',
-        'css/jquery.datepicker.min.css'
+        'css/jquery.datepicker.min.css',
+        'css/all.min.css'
     ];
     public $js = [
       // 'https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js',

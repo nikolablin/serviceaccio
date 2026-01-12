@@ -11,7 +11,16 @@ $config = [
         '@bower' => '@vendor/bower-asset',
         '@npm'   => '@vendor/npm-asset',
     ],
+    'language' => 'ru-RU',
     'components' => [
+        'formatter' => [
+            'class' => yii\i18n\Formatter::class,
+            'locale' => 'ru-RU',
+            'defaultTimeZone' => 'Asia/Almaty', // если нужно
+            'dateFormat' => 'php:d.m.Y',
+            'datetimeFormat' => 'php:d.m.Y H:i',
+            'timeFormat' => 'php:H:i',
+        ],
         'session' => [
             'class' => 'yii\web\Session',
             'savePath' => '@runtime/sessions',
@@ -53,6 +62,8 @@ $config = [
               '<alias:[\w-]+>' => 'site/<alias>',
               'ajax/process' => 'ajax/process',
               'register' => 'site/signup',
+              'media/file/<id:\d+>' => 'media/file',
+              'media/delete/<id:\d+>' => 'media/delete',
             ],
         ],
         'dbExternal' => [

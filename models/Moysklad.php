@@ -1651,6 +1651,35 @@ class Moysklad extends Model
       return $payload;
   }
 
+  private function normalizeDemandPositions(array $rows): array
+  {
+      $out = [];
+
+      foreach ($rows as $row) {
+          $meta = $row->assortment->meta ?? null;
+          if (!$meta) continue;
+
+          $out[] = [
+              'href'  => (string)$meta->href,
+              'type'  => (string)$meta->type,
+              'qty'   => number_format((float)($row->quantity ?? 0), 3, '.', ''),
+              'price' => isset($row->price) ? (int)$row->price : 0,
+          ];
+      }
+
+      usort($out, static fn($a, $b) =>
+          strcmp($a['href'] . '|' . $a['type'], $b['href'] . '|' . $b['type'])
+      );
+
+      return $out;
+  }
+
+  private function positionsEqual(array $a, array $b): bool
+  {
+      return sha1(json_encode($this->normalizeDemandPositions($a))) ===
+             sha1(json_encode($this->normalizeDemandPositions($b)));
+  }
+
   public function upsertDemandFromOrder($msorder, int $localOrderId, $config, array $options = [])
   {
       $accessdata = self::getMSLoginPassword();
@@ -1669,6 +1698,26 @@ class Moysklad extends Model
 
       if ($link && !empty($link->moysklad_demand_id)) {
           // UPDATE demand
+
+          // Проверка на теекущие позиции
+          $currentDemand = $this->getHrefData( 'https://api.moysklad.ru/api/remap/1.2/entity/demand/' . $demandId . '?expand=positions' );
+          $orderRows  = $msorder->positions->rows ?? [];
+          $demandRows = $currentDemand->positions->rows ?? [];
+
+          if (
+              !empty($payload['positions']) &&
+              $this->positionsEqual($orderRows, $demandRows)
+          ) {
+              // ❌ позиции совпадают — УБИРАЕМ их из payload
+              unset($payload['positions']);
+
+              file_put_contents(
+                  __DIR__ . '/../logs/ms_service/updatedemand.txt',
+                  "DEMAND {$demandId}: positions unchanged, skip sync\n",
+                  FILE_APPEND
+              );
+          }
+
           $demandId = $link->moysklad_demand_id;
 
           $url = 'https://api.moysklad.ru/api/remap/1.2/entity/demand/' . $demandId;
