@@ -276,14 +276,14 @@ class CronController extends Controller
               $sendWhatsappMessage  = true;
               switch($shopkey){
                 case 'accio':
-                  $waTemplate = 'set_kaspi_opinion_by_client_with_buttons_8';
+                  $waTemplate = 'set_kaspi_opinion_by_client_with_buttons_9';
                   break;
                 case 'ital':
                   $waTemplate = 'set_italfoods_kaspi_opinion_by_client_with_buttons_2';
                   $sendWhatsappMessage = false;
                   break;
                 case 'tutto':
-                  $waTemplate = 'set_kaspi_opinion_by_client_with_buttons_8';
+                  $waTemplate = 'set_kaspi_opinion_by_client_with_buttons_9';
                   $sendWhatsappMessage = false;
                   break;
               }
@@ -401,6 +401,7 @@ class CronController extends Controller
       }
 
     }
+
 
     /*
     Закрытие смен всех касс.
