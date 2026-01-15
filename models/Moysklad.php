@@ -558,6 +558,15 @@ class Moysklad extends Model
       ];
   }
 
+  private function buildAttributeMeta(string $entity, string $attrId): array
+  {
+      return [
+          'href'      => "https://api.moysklad.ru/api/remap/1.2/entity/{$entity}/metadata/attributes/{$attrId}",
+          'type'      => 'attributemetadata',
+          'mediaType' => 'application/json',
+      ];
+  }
+
   public function getOrganizations()
   {
     $accessdata = self::getMSLoginPassword();
@@ -1765,6 +1774,21 @@ class Moysklad extends Model
       // 2) CREATE demand
       $url = 'https://api.moysklad.ru/api/remap/1.2/entity/demand';
 
+      $stateToDemand = Yii::$app->params['moysklad']['demandUpdateHandler']['stateToDemand'];
+      $payload['state'] = [
+          'meta' => $this->buildStateMeta('demand', $stateToDemand)
+      ];
+
+      if ($stateToDemand !== '') {
+          $payload['state'] = [
+              'meta' => [
+                  'href'      => "https://api.moysklad.ru/api/remap/1.2/entity/demand/metadata/states/{$stateToDemand}",
+                  'type'      => 'state',
+                  'mediaType' => 'application/json',
+              ]
+          ];
+      }
+
       $ch = curl_init($url);
       curl_setopt_array($ch, [
           CURLOPT_RETURNTRANSFER => true,
@@ -2533,8 +2557,14 @@ class Moysklad extends Model
       return $this->requestJson('PUT', $url, ['state' => ['meta' => $stateMeta]]);
   }
 
-  public function createPaymentInFromOrder(object $order, object $demand)
-  {
+  public function createPaymentInFromOrder(
+      object $order,
+      object $demand,
+      string $orderNum,
+      $paymentTypeMeta,
+      string $incomeIssueAttrId,
+      string $incomeIssueValueId
+  ) {
       $url = "https://api.moysklad.ru/api/remap/1.2/entity/paymentin";
 
       $payload = [
@@ -2542,14 +2572,140 @@ class Moysklad extends Model
           'agent'        => ['meta' => $order->agent->meta],
           'sum'          => (int)($demand->sum ?? 0),
           'operations'   => [
-            [
-              'meta'      => $demand->meta,         // <-- Привязка к отгрузке
-              'linkedSum' => (int)($demand->sum ?? 0)
-            ]
+              [
+                  'meta'      => $demand->meta,
+                  'linkedSum' => (int)($demand->sum ?? 0),
+              ]
           ],
           'customerOrder'=> ['meta' => $order->meta],
           'applicable'   => false,
       ];
+
+      $attributes = [];
+
+      if ($orderNum !== '' && $orderNum !== '-') {
+          $attrId = YII::$app->params['moysklad']['incomeIssues']['orderNumIssueAttrId'];
+          $attributes[] = [
+              'meta'  => $this->buildAttributeMeta('paymentin', $attrId),
+              'id'    => $attrId,
+              'value' => $orderNum,
+          ];
+      }
+
+      if ($paymentTypeMeta && isset($paymentTypeMeta->meta)) {
+          $attrId = YII::$app->params['moysklad']['incomeIssues']['paymentTypeIssueAttrId'];
+          $attributes[] = [
+              'meta'  => $this->buildAttributeMeta('paymentin', $attrId),
+              'id'    => $attrId,
+              'value' => [
+                  'meta' => $paymentTypeMeta->meta,
+              ],
+          ];
+      }
+
+      if ($incomeIssueAttrId !== '' && $incomeIssueValueId !== '') {
+          $dictId = YII::$app->params['moysklad']['incomeIssues']['incomeDictId'];
+          $attributes[] = [
+              'meta'  => $this->buildAttributeMeta('paymentin', $incomeIssueAttrId),
+              'id'    => $incomeIssueAttrId,
+              'value' => [
+                  'meta' => [
+                      'href'      => "https://api.moysklad.ru/api/remap/1.2/entity/customentity/{$dictId}/{$incomeIssueValueId}",
+                      'type'      => 'customentity',
+                      'mediaType' => 'application/json',
+                  ],
+              ],
+          ];
+      }
+
+      if (!empty($attributes)) {
+          $payload['attributes'] = $attributes;
+      }
+
+      file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt', print_r($payload,true). PHP_EOL, FILE_APPEND);
+
+      return $this->requestJson('POST', $url, $payload);
+  }
+
+  // public function createPaymentInFromOrder(object $order, object $demand)
+  // {
+  //     $url = "https://api.moysklad.ru/api/remap/1.2/entity/paymentin";
+  //
+  //     $payload = [
+  //         'organization' => ['meta' => $order->organization->meta],
+  //         'agent'        => ['meta' => $order->agent->meta],
+  //         'sum'          => (int)($demand->sum ?? 0),
+  //         'operations'   => [
+  //           [
+  //             'meta'      => $demand->meta,         // <-- Привязка к отгрузке
+  //             'linkedSum' => (int)($demand->sum ?? 0)
+  //           ]
+  //         ],
+  //         'customerOrder'=> ['meta' => $order->meta],
+  //         'applicable'   => false,
+  //     ];
+  //
+  //     return $this->requestJson('POST', $url, $payload);
+  // }
+
+  public function createCashInFromOrder(
+      object $order,
+      object $demand,
+      string $orderNum,
+      $paymentTypeMeta,
+      string $incomeIssueAttrId,
+      string $incomeIssueValueId
+  ) {
+      $url = "https://api.moysklad.ru/api/remap/1.2/entity/cashin";
+
+      $payload = [
+          'organization' => ['meta' => $order->organization->meta],
+          'agent'        => ['meta' => $order->agent->meta],
+          'sum'          => (int)($order->sum ?? 0),
+          'operations'   => [
+              [
+                  'meta'      => $demand->meta,
+                  'linkedSum' => (int)($demand->sum ?? 0),
+              ]
+          ],
+          'customerOrder'=> ['meta' => $order->meta],
+          'applicable'   => false,
+      ];
+
+      $attributes = [];
+
+      /** Способ оплаты (справочник) */
+      if ($paymentTypeMeta && isset($paymentTypeMeta->meta)) {
+          $attrId = YII::$app->params['moysklad']['incomeIssues']['paymentTypeIssueCashAttrId'];
+
+          $attributes[] = [
+              'meta'  => $this->buildAttributeMeta('cashin', $attrId),
+              'id'    => $attrId,
+              'value' => [
+                  'meta' => $paymentTypeMeta->meta,
+              ],
+          ];
+      }
+
+      /** Статья доходов */
+      if ($incomeIssueAttrId !== '' && $incomeIssueValueId !== '') {
+          $dictId = YII::$app->params['moysklad']['incomeIssues']['incomeDictId'];
+          $attributes[] = [
+              'meta'  => $this->buildAttributeMeta('cashin', $incomeIssueAttrId),
+              'id'    => $incomeIssueAttrId,
+              'value' => [
+                  'meta' => [
+                      'href'      => "https://api.moysklad.ru/api/remap/1.2/entity/customentity/{$dictId}/{$incomeIssueValueId}",
+                      'type'      => 'customentity',
+                      'mediaType' => 'application/json',
+                  ],
+              ],
+          ];
+      }
+
+      if (!empty($attributes)) {
+          $payload['attributes'] = $attributes;
+      }
 
       return $this->requestJson('POST', $url, $payload);
   }

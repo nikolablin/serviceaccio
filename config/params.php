@@ -83,6 +83,8 @@ return [
       'demandStatePassed' => '732ffbde-0a19-11eb-0a80-055600083d2e',
       'demandStateClosed' => '24d4a11f-8af4-11eb-0a80-0122002915d0',
       'demandUpdateHandler' => [
+        'stateToDemand'           => '/db67917a-5717-11eb-0a80-079c002b43eb',
+
         'stateDemandCollected'    => 'eeed10b7-51a2-11ec-0a80-02ee0032e089',
         'stateDemandReturnNoCheck'=> '0ba2e09c-cda1-11eb-0a80-03110030c70c',
         'stateDemandDoReturn'     => '2a6c9db5-a7c4-11ed-0a80-10870015e950',
@@ -109,6 +111,33 @@ return [
       // money-in states:
       'paymentInStateWaiting' => '529980fb-346a-11eb-0a80-04cd00042953',
       'cashInStateWaiting'    => 'fc9b310f-2738-11eb-0a80-0902001c1e9c',
+
+      // Платежные Статьи доходов
+      'incomeIssues' => [
+        'cashinIssueAttrId' => '8184c165-0bc0-11ec-0a80-0817001a8435', // Атрибут cashin Статья доходов
+        'paymentIssueAttrId' => '9401deb0-0bc0-11ec-0a80-021c0019cf2b', // Атрибут paymentin Статья доходов
+        'paymentTypeIssueAttrId' => 'f36cd71a-ace5-11ed-0a80-06ac001a56c2', // Атрибут Способ оплаты во входящем платеже
+        'paymentTypeIssueCashAttrId' => '7e92f4ab-ace6-11ed-0a80-0570001a3e98', // Атрибут Способ оплаты в приходном ордере
+        'orderNumIssueAttrId' => '886cd568-ea7f-11ed-0a80-10a80071443d', // Атрибут Номер заказа во входящем платеже
+
+        'incomeDictId' => '1762788a-0bc0-11ec-0a80-00750019f2ed',
+
+        'roznProdaji' => '392e4b46-0bc0-11ec-0a80-057d0019c290', // Продажи розничные
+        'marketProdaji' => '925feba1-82ba-11ed-0a80-004000288b85', // Продажи маркетплейсы
+
+        'marketplaceProjects' => [
+          '5f351348-d269-11f0-0a80-15120016d622', // 🔴 Kaspi Accio
+          '431a8172-d26a-11f0-0a80-0f110016cabd', // 🔴 Tutto Capsule Kaspi
+          '98777142-d26a-11f0-0a80-1be40016550a', // 🔴 Ital Trade
+          'a463b9da-d26c-11f0-0a80-1a6b0016a57a', // 🔵 Wolt
+          '842c5548-c90c-11f0-0a80-1aee002c13e9', // 🟢 Halyk Market
+          'a4481c66-d274-11f0-0a80-0f110017905c', // 🟣 Forte Market
+        ],
+        'roznProjects' => [
+          '8fe86883-d275-11f0-0a80-15120017c4b6', // 🔥 Store
+          '6b625db1-d270-11f0-0a80-1512001756b3' // 💎 Юридическое лицо
+        ],
+      ],
 
       'channelAttrId' => '45bdad04-68d6-11ee-0a80-095d000776da', // ☎️ Каналы связи
       'paymentTypeAttrId' => '19fb8dcf-94ac-11ed-0a80-0e930023e914',

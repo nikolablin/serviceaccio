@@ -42,6 +42,9 @@ class DemandUpdateHandler
           return;
         }
 
+        // Принудительно торможу на 2 секунды, чтобы второй вебхук не шарахнул по первому
+        sleep(2);
+
         $moysklad = new Moysklad();
         $kaspi    = new Kaspi();
         $wolt     = new Wolt();
@@ -513,7 +516,7 @@ class DemandUpdateHandler
 
                         $paymentAttrId            = Yii::$app->params['moysklad']['demandPaymentTypeAttrId'] ?? null;
                         $paymentTypeId            = $paymentAttrId ? $moysklad->getAttributeValueId($demand, $paymentAttrId) : null;
-                        $cashRegisterPaymentType  = ($paymentTypeId === (Yii::$app->params['moysklad']['cashPaymentTypeId'] ? 0 : 1));
+                        $cashRegisterPaymentType = ($paymentTypeId === (Yii::$app->params['moysklad']['cashPaymentTypeId'] ?? '')) ? 0 : 1;
 
                         foreach (($demand->positions->rows ?? []) as $pos) {
                             $a = $pos->assortment ?? null;
@@ -662,9 +665,30 @@ class DemandUpdateHandler
                 }
 
                 // 2) Создаём документ в МС
+                $orderNum = $moysklad->getProductAttribute($msOrder->attributes,'a7f0812d-a0a3-11ed-0a80-114f003fc7f9');
+                $orderNum = (!$orderNum) ? '-' : $orderNum->value;
+
+                $paymentType = $moysklad->getProductAttribute($msOrder->attributes,YII::$app->params['moysklad']['paymentTypeAttrId']);
+                $paymentTypeMeta = (!$paymentType) ? false : $paymentType->value;
+
+                if(in_array($msOrder->project->id,YII::$app->params['moysklad']['incomeIssues']['marketplaceProjects'])){
+                  $incomeIssueAttrVal = YII::$app->params['moysklad']['incomeIssues']['marketProdaji'];
+                }
+                else {
+                  $incomeIssueAttrVal = YII::$app->params['moysklad']['incomeIssues']['roznProdaji'];
+                }
+
+                switch($docType){
+                  case 'cashin':
+                    $incomeIssueAttr = YII::$app->params['moysklad']['incomeIssues']['cashinIssueAttrId'];
+                    break;
+                  default:
+                    $incomeIssueAttr = YII::$app->params['moysklad']['incomeIssues']['paymentIssueAttrId'];
+                }
+
                 $resDoc = ($docType === 'cashin')
-                    ? $moysklad->createCashInFromOrder($msOrder, $demand)
-                    : $moysklad->createPaymentInFromOrder($msOrder, $demand);
+                    ? $moysklad->createCashInFromOrder($msOrder, $demand, $orderNum, $paymentTypeMeta, $incomeIssueAttr, $incomeIssueAttrVal)
+                    : $moysklad->createPaymentInFromOrder($msOrder, $demand, $orderNum, $paymentTypeMeta, $incomeIssueAttr, $incomeIssueAttrVal);
 
                 if (is_array($resDoc) && empty($resDoc['ok'])) {
                     file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
@@ -690,7 +714,7 @@ class DemandUpdateHandler
                     $waiting = Yii::$app->params['moysklad']['cashInStateWaiting'] ?? '';
                     if ($waiting !== '') {
                         $moysklad->updateCashInState($docId, $moysklad->buildStateMeta('cashin', $waiting));
-                    } 
+                    }
                     $moysklad->updateCashInApplicable($docId, false);
                 } else {
                     $waiting = Yii::$app->params['moysklad']['paymentInStateWaiting'] ?? '';

@@ -21,6 +21,9 @@ class CustomerOrderCreateHandler
             return;
         }
 
+        // Принудительно торможу на 2 секунды, чтобы второй вебхук не шарахнул по первому
+        sleep(2);
+
         $moysklad = new Moysklad();
 
         /**
