@@ -6,6 +6,24 @@ return [
     'senderName' => 'Example.com mailer',
     'cronToken' => 'GNIWRNB82589NVWU',
 
+    'wolt' => [
+      'baseUrl'           => 'https://pos-integration-service.wolt.com/',
+      'token'             => '23c529c7cfdca5a82bbfd3a846a72c1ed347c83c28e9ef8e53979f58661a8b29',
+      'secret'            => '670e3e05e5c7bdb1cda7e542ae9c73cc32451bda73958971fbe3e6324215a8a3',
+
+      'venue_id'          => '69671b2c02c47b76dea13d6b',
+      'order_api_key'     => 'OtIDBSjHwF5H87xxscgKUqr_WJJgvzth5BhU-A9oXE0=',
+      'menu_api_login'    => 'accio_test_menuapi',
+      'menu_api_password' => 'ae0b45f571fd6ee2c490e48fde095fd7049da2950b14e3190168cb4d07074151',
+      'timeout'           => 20,
+      'almaty_venue_id'    => '6141dc39feba5992a4d2e1d5',
+      'astana_venue_id'    => '617bcd10ab0bd1f03165036e',
+      'test_baseUrl'       => 'https://pos-integration-service.development.dev.woltapi.com/',
+      'test_order_api_key' => 'OtIDBSjHwF5H87xxscgKUqr_WJJgvzth5BhU-A9oXE0=',
+      'test_almaty_venue_id'    => '69671b2c02c47b76dea13d6b',
+      'test_astana_venue_id'    => '69671b2c02c47b76dea13d6b_astana',
+    ],
+
     'ukassa' => [
       'baseUrl'    => 'https://ukassa.kz',
       'loginPath'  => '/api/auth/login/',
@@ -85,6 +103,8 @@ return [
 
       // cash payment type (custom entity id from твоего примера):
       'cashPaymentTypeId' => '1fd236d5-836d-11ed-0a80-0dbe0033eb31',
+      'cashPaymentStatus' => '435a9570-c29d-11eb-0a80-077e0003e5b9', // Статус оплаты - Принять оплату в заказе
+      'cashPaymentStatusPayed' => '302da776-c29d-11eb-0a80-093a0003ad4a',
 
       // money-in states:
       'paymentInStateWaiting' => '529980fb-346a-11eb-0a80-04cd00042953',
@@ -93,12 +113,14 @@ return [
       'channelAttrId' => '45bdad04-68d6-11ee-0a80-095d000776da', // ☎️ Каналы связи
       'paymentTypeAttrId' => '19fb8dcf-94ac-11ed-0a80-0e930023e914',
       'demandPaymentTypeAttrId' => 'b4b6c6d6-836d-11ed-0a80-07fe00347b40',
+      'demandPaymentStatusAttrId' => '64869eb0-c29d-11eb-0a80-08be00040769',
       'configFallbackByPaymentType' => false, // по желанию
       'kaspiProjects' => [
         'accio' => '5f351348-d269-11f0-0a80-15120016d622', // 🔴 Kaspi Accio
         'tutto' => '431a8172-d26a-11f0-0a80-0f110016cabd', // 🔴 Tutto Capsule Kaspi
         'ital'  => '98777142-d26a-11f0-0a80-1be40016550a', // 🔴 Ital Trade
       ],
+      'woltProject' => 'a463b9da-d26c-11f0-0a80-1a6b0016a57a',
       'kaspiTokens' => [
         'accio' => 'dbU852Hq+JDbq5OiGDE+lZOkbpKgNX/qFfYfQTBYU60=',
         'tutto' => 'BiQdZihpwlTXKY2Ny6mCQiVnPHw8YwuuXExf6o1PB+8=',

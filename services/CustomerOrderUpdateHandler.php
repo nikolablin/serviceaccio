@@ -22,6 +22,9 @@ class CustomerOrderUpdateHandler
             return;
         }
 
+        // Принудительно торможу на 2 секунды, чтобы второй вебхук не шарахнул по первому
+        sleep(3);
+
         $moysklad = new Moysklad();
 
         /**
@@ -236,6 +239,8 @@ class CustomerOrderUpdateHandler
                 $reserve->created_at = date('Y-m-d H:i:s');
                 $reserve->updated_at = date('Y-m-d H:i:s');
                 $reserve->save(false);
+
+                $link = $reserve;
 
                 $demand = $moysklad->upsertDemandFromOrder(
                     $order,

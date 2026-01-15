@@ -1,8 +1,16 @@
 <?php
 use app\models\CashRegister;
+use app\models\Kaspi;
+
 
 ini_set('display_errors', '1');
 error_reporting(E_ALL);
+
+$kaspi = new Kaspi();
+
+print('<pre>');
+print_r($kaspi->getKaspiOrder('787718713', 'accio', true));
+print('</pre>');
 
 // CashRegister::getDepartmentData('UK00006241');
 

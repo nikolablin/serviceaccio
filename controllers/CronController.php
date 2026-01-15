@@ -161,8 +161,8 @@ class CronController extends Controller
                   $creatingOrder->warehouse = '023870f6-ee91-11ea-0a80-05f20007444d';
               }
 
-              $creatingOrder->kaspiOrderId    = $order->attributes->code;
-              $creatingOrder->kaspiOrderExtId = $order->id;
+              $creatingOrder->orderId    = $order->attributes->code;
+              $creatingOrder->orderExtId = $order->id;
               $creatingOrder->deliveryDate    = $kaspi->getKaspiDeliveryDate($order);
               $creatingOrder->deliveryTime    = ($creatingOrder->deliveryDate) ? $moysklad->getDeliveryTime($order) : false;
 
@@ -171,7 +171,7 @@ class CronController extends Controller
               $creatingOrder->fiscalBill      = $projectConfig->fiscal;
               $creatingOrder->cityStr         = '';
               $creatingOrder->address         = '';
-              $creatingOrder->kaspiDeliveryCost = property_exists($order->attributes,'deliveryCost') ? (string)$order->attributes->deliveryCost : (string)0;
+              $creatingOrder->deliveryCost = property_exists($order->attributes,'deliveryCost') ? (string)$order->attributes->deliveryCost : (string)0;
 
               if(property_exists($order->attributes,'deliveryAddress')):
                 $creatingOrder->cityStr       = $order->attributes->deliveryAddress->town;
@@ -206,7 +206,10 @@ class CronController extends Controller
               }
 
               if($addOrderToMoySklad){
-                $kaspiOrders->add($creatingOrder->kaspiOrderId,$creatingOrder->kaspiOrderExtId,'created');
+                $kaspiOrders->add($creatingOrder->orderId,$creatingOrder->orderExtId,'created');
+
+                file_put_contents(__DIR__ . '/../logs/kaspi/kaspiCreateOrders.txt', date('d.m.Y H:i') . PHP_EOL . 'CREATING OBJECT:: ' . PHP_EOL . print_r($creatingOrder,true) . PHP_EOL . PHP_EOL,FILE_APPEND);
+
                 $creatingOrderMS = $moysklad->createOrder($creatingOrder,'kaspi',$shopkey);
 
                 if(property_exists($creatingOrderMS,'errors')){
@@ -217,7 +220,7 @@ class CronController extends Controller
                   $telegram->sendTelegramMessage('Ошибка создания заказа Kaspi (' .$shopkey . ') #' . $order->attributes->code . '. Ответ МойСклад:' . PHP_EOL . $errorsStr, 'kaspi');
                 }
                 else {
-                  $kaspi->setKaspiOrderStatus($creatingOrder,'ACCEPTED_BY_MERCHANT',$shopkey);
+                  $setStatus = $kaspi->setKaspiOrderStatus($creatingOrder,'ACCEPTED_BY_MERCHANT',$shopkey);
                   $telegram->sendTelegramMessage('Заказ Kaspi (' . $shopkey . ') #' . $order->attributes->code . ' успешно добавлен в МойСклад.', 'kaspi');
                 }
               }

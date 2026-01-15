@@ -1,0 +1,11 @@
+{
+  "id": "6967e55ad6d9322e80941aa9",
+  "type": "order.notification",
+  "created_at": "2026-01-14T18:50:02.879Z",
+  "order": {
+    "id": "6967e49f654ed3a8c7cb6960",
+    "venue_id": "69671b2c02c47b76dea13d6b",
+    "status": "CANCELED",
+    "resource_url": "https://pos-integration-service.development.dev.woltapi.com/orders/6967e49f654ed3a8c7cb6960"
+  }
+}

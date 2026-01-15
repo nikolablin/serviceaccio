@@ -130,12 +130,13 @@ class Kaspi extends Model
 
   public function setKaspiOrderStatus($order,$orderStatus,$shopkey)
   {
+
     $token = Yii::$app->params['moysklad']['kaspiTokens'][$shopkey];
 
     $data                           = (object)array();
     $data->data                     = (object)array();
     $data->data->type               = 'orders';
-    $data->data->id                 = $order->kaspiOrderExtId;
+    $data->data->id                 = $order->orderExtId;
     $data->data->attributes         = (object)array();
     $data->data->attributes->status = $orderStatus;
 
@@ -143,7 +144,7 @@ class Kaspi extends Model
 
     switch($orderStatus){
       case 'ACCEPTED_BY_MERCHANT':
-        $data->data->attributes->code   = $order->kaspiOrderId;
+        $data->data->attributes->code   = $order->orderId;
         break;
       case 'ASSEMBLE':
         $data->data->attributes->numberOfSpace = $order->numOfPlaces;
@@ -170,6 +171,7 @@ class Kaspi extends Model
 
     curl_close ($ch);
 
+    return true;
   }
 
   public function getPointsTitles($shopid)
@@ -243,7 +245,7 @@ class Kaspi extends Model
     $moysklad               = new Moysklad();
 
     $order                  = (object)array();
-    $order->kaspiOrderId    = $kaspiOrderCode;
+    $order->orderId         = $kaspiOrderCode;
     $order->numOfPlaces     = $numberOfPlaces;
 
     $kaspiProjects = Yii::$app->params['moysklad']['kaspiProjects'];
@@ -265,17 +267,17 @@ class Kaspi extends Model
 
     switch($status) {
       case 'readyForDelivery':
-        $dbOrder = KaspiOrders::findByCode($order->kaspiOrderId);
+        $dbOrder = KaspiOrders::findByCode($order->orderId);
 
         if (!$dbOrder) {
             $telegram->sendTelegramMessage(
-                'Kaspi readyForDelivery: заказ #' . $order->kaspiOrderId . ' (' . $order->shopId . ') не найден в БД.',
+                'Kaspi readyForDelivery: заказ #' . $order->orderId . ' (' . $order->shopId . ') не найден в БД.',
                 'kaspi'
             );
             return;
         }
 
-        $order->kaspiOrderExtId = $dbOrder->extOrderId;
+        $order->orderExtId = $dbOrder->extOrderId;
 
         // 1) Идемпотентность: выполняем дальше только если статус "created"
         if (($dbOrder->status ?? null) !== 'created') {
@@ -285,7 +287,7 @@ class Kaspi extends Model
         // 2) В Kaspi меняем статус заказа
         self::setKaspiOrderStatus($order, 'ASSEMBLE', $order->shopId);
         $telegram->sendTelegramMessage(
-            'Заказ Kaspi #' . $order->kaspiOrderId . ' (' . $order->shopId . ') успешно помечен к отправке.',
+            'Заказ Kaspi #' . $order->orderId . ' (' . $order->shopId . ') успешно помечен к отправке.',
             'kaspi'
         );
 
@@ -293,7 +295,7 @@ class Kaspi extends Model
         $dbOrder->updateStatus('assemble');
 
         // 4) Получаем waybill (из API Kaspi)
-        $orderData = self::getKaspiOrder($order->kaspiOrderId, $order->shopId, true);
+        $orderData = self::getKaspiOrder($order->orderId, $order->shopId, true);
 
         $waybillLink = null;
         if (!empty($orderData->data) && !empty($orderData->data[0]->attributes->kaspiDelivery->waybill)) {
@@ -334,7 +336,7 @@ class Kaspi extends Model
         $dbOrder->saveWaybill($waybillLink);
 
         $telegram->sendTelegramMessage(
-            'Заказ Kaspi #' . $order->kaspiOrderId . ' (' . $order->shopId . ') - накладная успешно добавлена!',
+            'Заказ Kaspi #' . $order->orderId . ' (' . $order->shopId . ') - накладная успешно добавлена!',
             'kaspi'
         );
         break;

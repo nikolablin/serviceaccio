@@ -94,21 +94,27 @@ class CustomerOrderCreateHandler
          $configData->delivery_service = $moysklad->getAttributeValueId($order,'8a307d43-3b6a-11ee-0a80-06ae000fd467');
        }
 
-        $updated = $moysklad->updateOrderWithConfig($order->id, $configData);
+       if($projectId == Yii::$app->params['moysklad']['woltProject']){
+         $configData->status = false;
+         $configData->payment_type = false;
+         $configData->payment_status = false;
+       }
+
+       $updated = $moysklad->updateOrderWithConfig($order->id, $configData);
 
         if ($updated) {
-            $ph = $updated->positions->meta->href ?? null;
-            if ($ph) {
-                $updated->positions = $moysklad->getHrefData(
-                    $ph . '?expand=assortment'
-                );
-            }
-            if (empty($updated->state->meta->href)) {
-                $updated = $moysklad->getHrefData(
-                    $event->meta->href . '?expand=agent,project,organization,store,state,paymentType,attributes,positions'
-                );
-            }
-            $order = $updated;
+          $ph = $updated->positions->meta->href ?? null;
+          if ($ph) {
+              $updated->positions = $moysklad->getHrefData(
+                  $ph . '?expand=assortment'
+              );
+          }
+          if (empty($updated->state->meta->href)) {
+              $updated = $moysklad->getHrefData(
+                  $event->meta->href . '?expand=agent,project,organization,store,state,paymentType,attributes,positions'
+              );
+          }
+          $order = $updated;
         }
 
         /**

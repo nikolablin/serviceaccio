@@ -13,6 +13,7 @@ use app\models\OrdersReceipts;
 use app\models\OrdersConfigTable;
 use app\models\OrdersSalesReturns;
 use app\models\Kaspi;
+use app\services\Wolt;
 
 class DemandUpdateHandler
 {
@@ -42,7 +43,8 @@ class DemandUpdateHandler
         }
 
         $moysklad = new Moysklad();
-        $kaspi = new Kaspi();
+        $kaspi    = new Kaspi();
+        $wolt     = new Wolt();
 
         /**
          * 1️⃣ Загружаем отгрузку из МС (state + positions)
@@ -122,7 +124,7 @@ class DemandUpdateHandler
 
             if (!isset($msOrderCache[$msOrderId])) {
                 $msOrderCache[$msOrderId] = $moysklad->getHrefData(
-                    "https://api.moysklad.ru/api/remap/1.2/entity/customerorder/{$msOrderId}?expand=project,agent,organization,paymentType,attributes"
+                    "https://api.moysklad.ru/api/remap/1.2/entity/customerorder/{$msOrderId}?expand=project,store,agent,organization,paymentType,attributes"
                 );
             }
             $msOrder = $msOrderCache[$msOrderId];
@@ -143,10 +145,6 @@ class DemandUpdateHandler
             $link->moysklad_state_id = (string)$demandStateId;
             $link->updated_at = date('Y-m-d H:i:s');
             $link->save(false);
-
-
-            file_put_contents( __DIR__ . '/../logs/ms_service/updatedemand.txt', 'demandStateId:::' . print_r($demandStateId,true) . PHP_EOL, FILE_APPEND );
-            file_put_contents( __DIR__ . '/../logs/ms_service/updatedemand.txt', 'STATE_DEMAND_COLLECTED:::' . print_r($STATE_DEMAND_COLLECTED,true) . PHP_EOL, FILE_APPEND );
 
 
             // Ветка: Отгрузка “Собран”
@@ -188,13 +186,7 @@ class DemandUpdateHandler
                     file_put_contents( __DIR__ . '/../logs/ms_service/updatedemand.txt', 'TEST5:::' . print_r($sectionId,true) . PHP_EOL, FILE_APPEND );
 
                     $paymentAttrId            = Yii::$app->params['moysklad']['demandPaymentTypeAttrId'] ?? null;
-
-                    file_put_contents( __DIR__ . '/../logs/ms_service/updatedemand.txt', 'TEST6:::' . print_r($paymentAttrId,true) . PHP_EOL, FILE_APPEND );
-
                     $paymentTypeId            = $paymentAttrId ? $moysklad->getAttributeValueId($demand, $paymentAttrId) : null;
-
-                    file_put_contents( __DIR__ . '/../logs/ms_service/updatedemand.txt', 'PAYMENT_DATA:::' . print_r($paymentTypeId,true) . PHP_EOL, FILE_APPEND );
-
                     $isCash = ($paymentTypeId === (Yii::$app->params['moysklad']['cashPaymentTypeId'] ?? ''));
                     $cashRegisterPaymentType = $isCash ? 0 : 1;
 
@@ -274,6 +266,16 @@ class DemandUpdateHandler
                   $placesNum = (!$placesNum) ? 1 : $placesNum->value;
 
                   $kaspi->setKaspiReadyForDelivery($kaspiOrderNum,$placesNum,'readyForDelivery',$msOrder->project->id);
+                }
+
+                // Если заказ Wolt, то отправить им метку, что заказ собран
+                if($msOrder->project->id == YII::$app->params['moysklad']['woltProject']){
+                  $woltOrderNum = $moysklad->getProductAttribute($msOrder->attributes,'a7f0812d-a0a3-11ed-0a80-114f003fc7f9');
+                  $woltOrderNum = (!$woltOrderNum) ? false : $woltOrderNum->value;
+
+                  if($woltOrderNum){
+                    $resp = $wolt->markOrderReady($woltOrderNum);
+                  }
                 }
 
                 // 3) Заказу поставить статус "Собран"
@@ -603,7 +605,6 @@ class DemandUpdateHandler
             }
 
 
-
             // Ветка "ЗАвершен"/"Закрыт"
             /**
              * =========================
@@ -660,11 +661,6 @@ class DemandUpdateHandler
                     continue;
                 }
 
-                file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
-                    "RESERVE OK id={$row->id}\n",
-                    FILE_APPEND
-                );
-
                 // 2) Создаём документ в МС
                 $resDoc = ($docType === 'cashin')
                     ? $moysklad->createCashInFromOrder($msOrder, $demand)
@@ -694,7 +690,7 @@ class DemandUpdateHandler
                     $waiting = Yii::$app->params['moysklad']['cashInStateWaiting'] ?? '';
                     if ($waiting !== '') {
                         $moysklad->updateCashInState($docId, $moysklad->buildStateMeta('cashin', $waiting));
-                    }
+                    } 
                     $moysklad->updateCashInApplicable($docId, false);
                 } else {
                     $waiting = Yii::$app->params['moysklad']['paymentInStateWaiting'] ?? '';

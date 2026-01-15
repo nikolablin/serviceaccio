@@ -64,6 +64,8 @@ $config = [
               'register' => 'site/signup',
               'media/file/<id:\d+>' => 'media/file',
               'media/delete/<id:\d+>' => 'media/delete',
+              'POST wolt/get' => 'wolt/get',
+              'GET wolt/get' => 'wolt/get',
             ],
         ],
         'dbExternal' => [

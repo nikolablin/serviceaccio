@@ -2018,7 +2018,7 @@ class Moysklad extends Model
   public function createOrder($order,$area,$shopkey)
   {
     $data = (object)array();
-    $data->name = $order->kaspiOrderId . '_' . $area . '_' . $shopkey;
+    $data->name = $order->orderId . '_' . $area . '_' . $shopkey;
 
     if($order->comment):
       $data->description = $order->comment;
@@ -2088,7 +2088,7 @@ class Moysklad extends Model
     $attributeMarketplaceCode->meta->href = 'https://api.moysklad.ru/api/remap/1.2/entity/customerorder/metadata/attributes/a7f0812d-a0a3-11ed-0a80-114f003fc7f9';
     $attributeMarketplaceCode->meta->type = 'attributemetadata';
     $attributeMarketplaceCode->meta->mediaType = 'application/json';
-    $attributeMarketplaceCode->value = $order->kaspiOrderId;
+    $attributeMarketplaceCode->value = $order->orderId;
     array_push($data->attributes,$attributeMarketplaceCode);
 
     // Kaspi delivery cost
@@ -2097,20 +2097,19 @@ class Moysklad extends Model
     $attributeKaspiDeliveryCost->meta->href = 'https://api.moysklad.ru/api/remap/1.2/entity/customerorder/metadata/attributes/f12cde65-be93-11ee-0a80-0bae0039f7d9';
     $attributeKaspiDeliveryCost->meta->type = 'attributemetadata';
     $attributeKaspiDeliveryCost->meta->mediaType = 'application/json';
-    $attributeKaspiDeliveryCost->value = $order->kaspiDeliveryCost;
+    $attributeKaspiDeliveryCost->value = $order->deliveryCost;
     array_push($data->attributes,$attributeKaspiDeliveryCost);
 
-    // External ID of Kaspi order
-    $attributeExternalIdKaspi = (object)array();
-    $attributeExternalIdKaspi->meta = (object)array();
-    $attributeExternalIdKaspi->meta->href = 'https://api.moysklad.ru/api/remap/1.2/entity/customerorder/metadata/attributes/11dc767c-52d6-11ee-0a80-0f3d00080bcb';
-    $attributeExternalIdKaspi->meta->type = 'attributemetadata';
-    $attributeExternalIdKaspi->meta->mediaType = 'application/json';
-    $attributeExternalIdKaspi->value = $order->kaspiOrderExtId;
-    array_push($data->attributes,$attributeExternalIdKaspi);
-
-    // $order->deliveryDate = new DateTime(date('Y-m-d H:i:s'));
-    // $order->deliveryTime = '28fa59b6-75d1-11eb-0a80-06210039e247';
+    if($area == 'kaspi'){
+      // External ID of Kaspi order
+      $attributeExternalIdKaspi = (object)array();
+      $attributeExternalIdKaspi->meta = (object)array();
+      $attributeExternalIdKaspi->meta->href = 'https://api.moysklad.ru/api/remap/1.2/entity/customerorder/metadata/attributes/11dc767c-52d6-11ee-0a80-0f3d00080bcb';
+      $attributeExternalIdKaspi->meta->type = 'attributemetadata';
+      $attributeExternalIdKaspi->meta->mediaType = 'application/json';
+      $attributeExternalIdKaspi->value = $order->orderExtId;
+      array_push($data->attributes,$attributeExternalIdKaspi);
+    }
 
     if($order->deliveryDate):
       $orderDeliveryDate = $order->deliveryDate . ' 14:59:59';
@@ -2664,10 +2663,12 @@ class Moysklad extends Model
       $payload = [
           'organization' => ['meta' => $order->organization->meta],
           'agent'        => ['meta' => $order->agent->meta],
+          'store'        => ['meta' => $order->store->meta],
           'demand'       => ['meta' => $demand->meta],
           'applicable'   => false,
           'positions'    => $positions,
           'attributes'   => $attributes,
+
       ];
 
       return $this->requestJson('POST', $url, $payload);
