@@ -210,6 +210,8 @@ class CronController extends Controller
 
                 file_put_contents(__DIR__ . '/../logs/kaspi/kaspiCreateOrders.txt', date('d.m.Y H:i') . PHP_EOL . 'CREATING OBJECT:: ' . PHP_EOL . print_r($creatingOrder,true) . PHP_EOL . PHP_EOL,FILE_APPEND);
 
+                $creatingOrder->autoorder = true;
+
                 $creatingOrderMS = $moysklad->createOrder($creatingOrder,'kaspi',$shopkey);
 
                 if(property_exists($creatingOrderMS,'errors')){

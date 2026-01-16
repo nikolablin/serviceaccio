@@ -222,4 +222,20 @@ class WoltOrderImporter
         $vat = $items[0]['item_price']['vat_percentage'] ?? null;
         return $vat !== null ? (float)$vat : null;
     }
+
+    public function getVenueIdByOrderId(string $woltOrderId): ?string
+    {
+        $woltOrderId = trim($woltOrderId);
+        if ($woltOrderId === '') return null;
+
+        $row = Yii::$app->db->createCommand("
+            SELECT venue_id
+            FROM {{%wolt_orders}}
+            WHERE wolt_order_id = :id
+            LIMIT 1
+        ", [':id' => $woltOrderId])->queryOne();
+
+        $venueId = (string)($row['venue_id'] ?? '');
+        return $venueId !== '' ? $venueId : null;
+    }
 }

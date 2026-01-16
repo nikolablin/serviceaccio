@@ -14,21 +14,22 @@ use app\models\OrdersConfigTable;
 use app\models\OrdersSalesReturns;
 use app\models\Kaspi;
 use app\services\Wolt;
+use app\services\WoltOrderImporter;
 
 class DemandUpdateHandler
 {
-    private function resolveCashRegisterCodeForOrder(object $order): string
+    private function resolveCashRegisterCodeForOrder(object $configData): string
     {
         // project id из MS-заказа (uuid)
-        $projectId = (string)($order->project->id ?? '');
+        // $projectId = (string)($order->project->id ?? '');
 
-        if ($projectId === '') {
-            return '';
-        }
+        // if ($projectId === '') {
+        //     return '';
+        // }
 
         $cfg = OrdersConfigTable::find()
             ->select(['cash_register'])
-            ->where(['project' => $projectId])
+            ->where(['id' => $configData->id])
             ->asArray()
             ->one();
 
@@ -45,9 +46,10 @@ class DemandUpdateHandler
         // Принудительно торможу на 2 секунды, чтобы второй вебхук не шарахнул по первому
         sleep(2);
 
-        $moysklad = new Moysklad();
-        $kaspi    = new Kaspi();
-        $wolt     = new Wolt();
+        $moysklad     = new Moysklad();
+        $kaspi        = new Kaspi();
+        $wolt         = new Wolt();
+        $woltimporter = new WoltOrderImporter();
 
         /**
          * 1️⃣ Загружаем отгрузку из МС (state + positions)
@@ -132,6 +134,9 @@ class DemandUpdateHandler
             }
             $msOrder = $msOrderCache[$msOrderId];
 
+            $orderIsManual  = $moysklad->isManualOrder($msOrder);
+            $configData     = (new \app\services\OrdersConfigResolver())->resolve($msOrder,$orderIsManual);
+
             if (empty($msOrder->id)) {
                 continue;
             }
@@ -166,7 +171,7 @@ class DemandUpdateHandler
 
                 if ($needFiscal) {
 
-                    $cashRegisterCode = $this->resolveCashRegisterCodeForOrder($msOrder);
+                    $cashRegisterCode = $this->resolveCashRegisterCodeForOrder($configData);
 
                     if ($cashRegisterCode === '') {
                         file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
@@ -276,8 +281,17 @@ class DemandUpdateHandler
                   $woltOrderNum = $moysklad->getProductAttribute($msOrder->attributes,'a7f0812d-a0a3-11ed-0a80-114f003fc7f9');
                   $woltOrderNum = (!$woltOrderNum) ? false : $woltOrderNum->value;
 
-                  if($woltOrderNum){
-                    $resp = $wolt->markOrderReady($woltOrderNum);
+                  if ($woltOrderNum) {
+                      $venueId = $woltimporter->getVenueIdByOrderId($woltOrderNum);
+
+                      if ($venueId) {
+                          $resp = $wolt->markOrderReady($woltOrderNum, $venueId);
+                      } else {
+                        file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
+                            "ORDER WOLT SET VENUE ID ERROR {$woltOrderNum}\n",
+                            FILE_APPEND
+                        );
+                      }
                   }
                 }
 
@@ -498,7 +512,7 @@ class DemandUpdateHandler
                  */
                 if ($needFiscal) {
 
-                    $cashRegisterCode = $this->resolveCashRegisterCodeForOrder($msOrder);
+                    $cashRegisterCode = $this->resolveCashRegisterCodeForOrder($configData);
 
                     if ($cashRegisterCode === '') {
                         file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',

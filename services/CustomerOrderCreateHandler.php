@@ -38,15 +38,13 @@ class CustomerOrderCreateHandler
         }
 
         $projectId = basename($order->project->meta->href);
+        $orderIsManual = $moysklad->isManualOrder($order); // Определение вручную созданного заказа
 
         /**
          * 2️⃣ Работаем ТОЛЬКО с проектами,
          *     для которых есть конфигурация
          */
-         $configData = (new \app\services\OrdersConfigResolver())->resolve($order);
-        // $configData = OrdersConfigTable::findOne([
-        //     'project' => $projectId,
-        // ]);
+         $configData = (new \app\services\OrdersConfigResolver())->resolve($order,$orderIsManual);
 
         if (!$configData) {
             // Проект не обслуживается — просто игнорируем
@@ -68,8 +66,7 @@ class CustomerOrderCreateHandler
          */
         $stateHref = $order->state->meta->href ?? null;
         $stateId   = $stateHref ? basename($stateHref) : null;
-
-        $orderId = Orders::upsertFromMs($order, $projectId, 1);
+        $orderId   = Orders::upsertFromMs($order, $projectId, (($orderIsManual) ? 2 : 1));
 
         // ✅ текущий статус в локалку
         if ($stateId) {
@@ -97,6 +94,9 @@ class CustomerOrderCreateHandler
          $configData->delivery_service = $moysklad->getAttributeValueId($order,'8a307d43-3b6a-11ee-0a80-06ae000fd467');
        }
 
+       /*
+       Проверяем заказы Wolt
+       */
        if($projectId == Yii::$app->params['moysklad']['woltProject']){
          $configData->status = false;
          $configData->payment_type = false;

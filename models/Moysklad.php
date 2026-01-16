@@ -2039,6 +2039,26 @@ class Moysklad extends Model
     return 'ce22d9f6-4941-11ed-0a80-00bd000e47e9';
   }
 
+  public function isManualOrder(object $order): bool
+  {
+      $attrId = YII::$app->params['moysklad']['autoorderAttrId'];
+
+      if (empty($order->attributes)) {
+          return true; // нет атрибутов → точно ручной
+      }
+
+      foreach ($order->attributes as $attr) {
+          if (
+              ($attr->meta->href ?? '') &&
+              str_ends_with($attr->meta->href, $attrId)
+          ) {
+              return empty($attr->value); // true → авто, false/null → ручной
+          }
+      }
+
+      return true; // атрибут не найден → ручной
+  }
+
   public function createOrder($order,$area,$shopkey)
   {
     $data = (object)array();
@@ -2133,6 +2153,17 @@ class Moysklad extends Model
       $attributeExternalIdKaspi->meta->mediaType = 'application/json';
       $attributeExternalIdKaspi->value = $order->orderExtId;
       array_push($data->attributes,$attributeExternalIdKaspi);
+    }
+
+    // Проставить Автозаказ
+    if(property_exists($order,'autoorder')){
+      $attributeAutoorder = (object)array();
+      $attributeAutoorder->meta = (object)array();
+      $attributeAutoorder->meta->href = 'https://api.moysklad.ru/api/remap/1.2/entity/customerorder/metadata/attributes/93cb86d9-f2df-11f0-0a80-1472000f820b';
+      $attributeAutoorder->meta->type = 'attributemetadata';
+      $attributeAutoorder->meta->mediaType = 'application/json';
+      $attributeAutoorder->value = $order->autoorder;
+      array_push($data->attributes,$attributeAutoorder);
     }
 
     if($order->deliveryDate):
@@ -2710,26 +2741,26 @@ class Moysklad extends Model
       return $this->requestJson('POST', $url, $payload);
   }
 
-  public function createCashInFromOrder(object $order, object $demand)
-  {
-      $url = "https://api.moysklad.ru/api/remap/1.2/entity/cashin";
-
-      $payload = [
-          'organization' => ['meta' => $order->organization->meta],
-          'agent'        => ['meta' => $order->agent->meta],
-          'sum'          => (int)($order->sum ?? 0),
-          'operations'   => [
-            [
-              'meta'      => $demand->meta,         // <-- Привязка к отгрузке
-              'linkedSum' => (int)($demand->sum ?? 0)
-            ]
-          ],
-          'customerOrder'=> ['meta' => $order->meta],
-          'applicable'   => false,
-      ];
-
-      return $this->requestJson('POST', $url, $payload);
-  }
+  // public function createCashInFromOrder(object $order, object $demand)
+  // {
+  //     $url = "https://api.moysklad.ru/api/remap/1.2/entity/cashin";
+  //
+  //     $payload = [
+  //         'organization' => ['meta' => $order->organization->meta],
+  //         'agent'        => ['meta' => $order->agent->meta],
+  //         'sum'          => (int)($order->sum ?? 0),
+  //         'operations'   => [
+  //           [
+  //             'meta'      => $demand->meta,         // <-- Привязка к отгрузке
+  //             'linkedSum' => (int)($demand->sum ?? 0)
+  //           ]
+  //         ],
+  //         'customerOrder'=> ['meta' => $order->meta],
+  //         'applicable'   => false,
+  //     ];
+  //
+  //     return $this->requestJson('POST', $url, $payload);
+  // }
 
   public function deleteDemand(string $id)
   {

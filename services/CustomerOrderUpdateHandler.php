@@ -49,11 +49,12 @@ class CustomerOrderUpdateHandler
         }
 
         $projectId = basename($order->project->meta->href);
+        $orderIsManual = $moysklad->isManualOrder($order); // Определение вручную созданного заказа
 
         /**
          * 2️⃣ Конфиг проекта (через resolver)
          */
-        $configData = (new \app\services\OrdersConfigResolver())->resolve($order);
+        $configData = (new \app\services\OrdersConfigResolver())->resolve($order,$orderIsManual);
         if (!$configData) {
             return;
         }
@@ -100,7 +101,7 @@ class CustomerOrderUpdateHandler
         /**
          * 5️⃣ Сохраняем заказ локально
          */
-        $orderId = Orders::upsertFromMs($order, $projectId, 1);
+        $orderId = Orders::upsertFromMs($order, $projectId, (($orderIsManual) ? 2 : 1));
         OrdersClients::upsertFromMs($orderId, $order);
         OrdersProducts::syncFromMs($orderId, $order);
 

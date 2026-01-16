@@ -49,8 +49,7 @@ class OrdersConfig extends Model
         $storeProjectId       = '8fe86883-d275-11f0-0a80-15120017c4b6'; // 🔥 Store
         $accioStoreProjectId  = 'c4bd7d52-d276-11f0-0a80-17910017cc0c'; // ♥️ Accio Store
 
-        $emptyProjects = [
-        ];
+        $emptyProjects = [];
 
         // ---------- ПУСТО ----------
         if (in_array($mid, $emptyProjects, true)) {
@@ -100,6 +99,7 @@ class OrdersConfig extends Model
                 2 => '2. Сайт - Наличные',
                 3 => '3. Вручную - Банковская карта',
                 4 => '4. Вручную - Наличные',
+                5 => '5. Вручную - Безналичный расчет',
             ];
 
             $form  = '<form name="order-config">';

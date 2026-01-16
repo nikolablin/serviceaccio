@@ -13,7 +13,7 @@ class OrdersConfigResolver
      * - если по проекту 1 запись — возвращает её
      * - если записей > 1 — выбирает по (project + channel + payment_type)
      */
-    public function resolve(object $order): ?OrdersConfigTable
+    public function resolve(object $order, $isManual = false): ?OrdersConfigTable
     {
         $projectId  = $this->projectId($order);
         $moysklad   = new Moysklad();
@@ -37,13 +37,17 @@ class OrdersConfigResolver
             // для multi-config проектов без этих полей — конфиг не выбрать
             return null;
         }
+        $where = [
+                  'project'      => $projectId,
+                  'payment_type' => $paymentTypeId,
+                ]
+
+        if(!$isManual){
+          $where['channel'] = $channelId;
+        }
 
         // 3) точный матч: project + payment_type + channel
-        $config = OrdersConfigTable::find()->where([
-            'project'      => $projectId,
-            'payment_type' => $paymentTypeId,
-            'channel'      => $channelId,
-        ])->one();
+        $config = OrdersConfigTable::find()->where($where)->one();
 
         if ($config) return $config;
 

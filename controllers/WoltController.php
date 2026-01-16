@@ -22,9 +22,9 @@ class WoltController extends Controller
         Yii::$app->response->format = Response::FORMAT_JSON;
 
         // только POST
-        // if (!Yii::$app->request->isPost) {
-        //     throw new BadRequestHttpException('POST required');
-        // }
+        if (!Yii::$app->request->isPost) {
+            throw new BadRequestHttpException('POST required');
+        }
 
         // проверка token из GET
         $this->checkToken();
@@ -36,7 +36,6 @@ class WoltController extends Controller
     {
         $errorLog = __DIR__ . '/../logs/wolt/errors.txt';
         $dataLog  = __DIR__ . '/../logs/wolt/data.txt';
-        $testFile = __DIR__ . '/test.json';
 
         $raw = Yii::$app->request->rawBody;
         // $raw = file_get_contents($testFile);
@@ -68,6 +67,7 @@ class WoltController extends Controller
         $type     = (string)($data['type'] ?? '');
         $status   = (string)($data['order']['status'] ?? '');
         $orderId  = (string)($data['order']['id'] ?? '');
+        $venueId  = (string)($data['order']['venue_id'] ?? '');
 
         if ($type === 'order.notification' && $orderId !== ''){
 
@@ -83,7 +83,7 @@ class WoltController extends Controller
               $toCreate = false;
 
               try {
-                  $order = $wolt->getOrder($orderId);
+                  $order = $wolt->getOrder($orderId,$venueId);
 
                   if($order){
                     $toCreate = true;
@@ -114,14 +114,14 @@ class WoltController extends Controller
                   $addOrderToMoySklad = true;
 
                   $creatingOrder = (object)array();
-                  $creatingOrder->comment       = '';
+                  $creatingOrder->comment       = $order['consumer_comment'];
                   $creatingOrder->products      = [];
                   $creatingOrder->project       = $projectConfig->project;
                   $creatingOrder->organization  = $projectConfig->organization;
                   $creatingOrder->orderStatus   = $projectConfig->status;
 
                   switch($order['venue']['id']){
-                    case YII::$app->params['wolt']['test_astana_venue_id']:
+                    case YII::$app->params['wolt']['astana_venue_id']:
                       $creatingOrder->warehouse = '805d5404-3797-11eb-0a80-01b1001ba27a';
                       $creatingOrder->city      = '4a9f5042-3470-11eb-0a80-056100175606';
                       break;
@@ -219,6 +219,8 @@ class WoltController extends Controller
                     $creatingOrder->address = (string)($order['delivery']['location']['street_address'] ?? '');
                   }
 
+                  $creatingOrder->autoorder = true;
+
                   if($addOrderToMoySklad){
                     try {
                         $msOrder  = $moysklad->createOrder($creatingOrder, 'wolt', $order['id']);
@@ -227,13 +229,13 @@ class WoltController extends Controller
                         if (!empty($msOrder) && (isset($msOrder->id) || isset($msOrder->meta))) {
 
                             try {
-                                switch($order['type']){
-                                  case 'preorder':
-                                    $woltAccept = $wolt->confirmPreOrder($order['id']);
-                                    break;
-                                  default:
-                                    $woltAccept = $wolt->acceptOrder($order['id']);
-                                }
+
+                              $venueId = (string)($order['venue']['id'] ?? $order['venue_id'] ?? '');
+                              $isPre   = (($order['type'] ?? '') === 'preorder');
+
+                              $woltAccept = $isPre
+                                  ? $wolt->confirmPreOrder($order['id'], $venueId)
+                                  : $wolt->acceptOrder($order['id'], $venueId);
 
                                 file_put_contents(
                                     $dataLog,
@@ -267,7 +269,7 @@ class WoltController extends Controller
             // Отмена заказа
             case 'CANCELED':
               try {
-                  $order = $wolt->getOrder($orderId);
+                  $order = $wolt->getOrder($orderId,$venueId);
 
                   if($order){
                     $toCancel = true;

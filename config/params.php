@@ -8,16 +8,19 @@ return [
 
     'wolt' => [
       'baseUrl'           => 'https://pos-integration-service.wolt.com/',
-      'token'             => '23c529c7cfdca5a82bbfd3a846a72c1ed347c83c28e9ef8e53979f58661a8b29',
-      'secret'            => '670e3e05e5c7bdb1cda7e542ae9c73cc32451bda73958971fbe3e6324215a8a3',
+      'token'             => 'f539fcc5c3bcaf861f52fa6b278728a347abf251a6d336f3f28c3d2445e7a1fb',
+      'secret'            => 'f539fcc5c3bcaf861f52fa6b278728a347abf251a6d336f3f28c3d2445e7a1fb',
 
-      'venue_id'          => '69671b2c02c47b76dea13d6b',
-      'order_api_key'     => 'OtIDBSjHwF5H87xxscgKUqr_WJJgvzth5BhU-A9oXE0=',
+      'almaty_order_api_key'     => 'Fq3oGC4jYcvywOOIxvcc30Hfp2g0Hly7CjG3YvMWI4Q=',
+      'astana_order_api_key'     => 'AT-yX16C1-Yvwf7AdYUSFLUEBjzyk7I7q_IjZ97AGV8=',
+
       'menu_api_login'    => 'accio_test_menuapi',
       'menu_api_password' => 'ae0b45f571fd6ee2c490e48fde095fd7049da2950b14e3190168cb4d07074151',
       'timeout'           => 20,
+
       'almaty_venue_id'    => '6141dc39feba5992a4d2e1d5',
       'astana_venue_id'    => '617bcd10ab0bd1f03165036e',
+
       'test_baseUrl'       => 'https://pos-integration-service.development.dev.woltapi.com/',
       'test_order_api_key' => 'OtIDBSjHwF5H87xxscgKUqr_WJJgvzth5BhU-A9oXE0=',
       'test_almaty_venue_id'    => '69671b2c02c47b76dea13d6b',
@@ -65,6 +68,7 @@ return [
         'd3e01366-75ca-11eb-0a80-02590037e535',
         '6d4d6565-79a4-11eb-0a80-07bf001ea079',
       ],
+      'autoorderAttrId' => '93cb86d9-f2df-11f0-0a80-1472000f820b',
       'takeToJobOrderState' => '02482aa0-ee91-11ea-0a80-05f20007446d',
       'deleteAllFromOrderState' => '02482aa0-ee91-11ea-0a80-05f20007446d',
       'orderStateInvoiceIssued' => '6d4d6565-79a4-11eb-0a80-07bf001ea079',
