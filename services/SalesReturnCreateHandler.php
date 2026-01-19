@@ -20,6 +20,9 @@ class SalesReturnCreateHandler
 
     public function handle(object $event): void
     {
+      echo 'ok';
+      exit();
+
         if (
             ($event->meta->type ?? null) !== 'salesreturn'
             || ($event->action ?? null) !== 'CREATE'
@@ -59,12 +62,6 @@ class SalesReturnCreateHandler
          */
         $orderHref = $sr->customerOrder->meta->href ?? null;
         if (!$orderHref) return;
-
-
-
-echo 'ok';
-exit();
-
 
 
 

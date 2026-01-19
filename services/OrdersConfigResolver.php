@@ -40,7 +40,7 @@ class OrdersConfigResolver
         $where = [
                   'project'      => $projectId,
                   'payment_type' => $paymentTypeId,
-                ]
+                ];
 
         if(!$isManual){
           $where['channel'] = $channelId;

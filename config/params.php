@@ -62,6 +62,11 @@ return [
       'operationTypeSell'   => 2
     ],
 
+    'sendpulse' => [
+      'user_id' => '7289be20b0b529f7fb296aad74832408',
+      'secret'  => '257d30d3c90d55ae84ca661758347ea6',
+      'bot_id'  => '626546739d06f4651210b358',
+    ],
     'moysklad' => [
       'loopGuardTtl' => 10,
       'allowDemandStates' => [
@@ -84,6 +89,7 @@ return [
         '0ba2e09c-cda1-11eb-0a80-03110030c70c' => '02482e52-ee91-11ea-0a80-05f200074472',
         'aa7acdbc-a7c9-11ed-0a80-0c71001732ca' => '02482e52-ee91-11ea-0a80-05f200074472',
       ],
+      'salesReturnState1' => '88b38f1f-87dc-11ec-0a80-0fbe0028a736',
       'demandStatePassed' => '732ffbde-0a19-11eb-0a80-055600083d2e',
       'demandStateClosed' => '24d4a11f-8af4-11eb-0a80-0122002915d0',
       'demandUpdateHandler' => [

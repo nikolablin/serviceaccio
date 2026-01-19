@@ -954,7 +954,7 @@ class Moysklad extends Model
     return true;
   }
 
-  private function createPayment($type,$organizationId,$accountId,$contragentId,$paymentTypeId,$issueOut = false, $issueOutNew = false,$paymentSum,$postDate)
+  private function createPayment($type,$organizationId,$accountId,$contragentId,$paymentTypeId, $issueOut = false, $issueOutNew = false, $paymentSum, $postDate)
   {
     $accessdata = self::getMSLoginPassword();
 
@@ -2762,9 +2762,57 @@ class Moysklad extends Model
   //     return $this->requestJson('POST', $url, $payload);
   // }
 
+  public function batchDeleteEntity(string $path, $payload, array $options = []): array
+  {
+      $access = self::getMSLoginPassword();
+
+      $url = 'https://api.moysklad.ru/api/remap/1.2/entity/' . ltrim($path, '/');
+
+      $ch = curl_init($url);
+      curl_setopt_array($ch, [
+          CURLOPT_RETURNTRANSFER => true,
+          CURLOPT_CUSTOMREQUEST  => 'POST',
+          CURLOPT_HTTPHEADER     => [
+              'Authorization: Basic ' . base64_encode($access->login . ':' . $access->password),
+              'Accept-Encoding: gzip',
+              'Content-Type: application/json',
+          ],
+          CURLOPT_POSTFIELDS     => json_encode($payload, JSON_UNESCAPED_UNICODE),
+          // CURLOPT_CONNECTTIMEOUT => 15,
+          // CURLOPT_TIMEOUT        => 60,
+      ]);
+
+      $raw  = curl_exec($ch);
+      $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+      $err  = curl_error($ch);
+      curl_close($ch);
+
+      $json = null;
+      if (is_string($raw) && $raw !== '') {
+          $decoded = json_decode($raw, true);
+          if (json_last_error() === JSON_ERROR_NONE) $json = $decoded;
+      }
+
+      return [
+          'ok'   => ($code >= 200 && $code < 300),
+          'code' => $code,
+          'err'  => $err ?: '',
+          'json' => $json,
+          'raw'  => $raw,
+          'url'  => $url,
+      ];
+  }
+
+
   public function deleteDemand(string $id)
   {
       $url = "https://api.moysklad.ru/api/remap/1.2/entity/demand/{$id}";
+      return $this->requestJson('DELETE', $url);
+  }
+
+  public function deleteSalesreturn(string $id)
+  {
+      $url = "https://api.moysklad.ru/api/remap/1.2/entity/salesreturn/{$id}";
       return $this->requestJson('DELETE', $url);
   }
 
@@ -2851,6 +2899,7 @@ class Moysklad extends Model
           'organization' => ['meta' => $order->organization->meta],
           'agent'        => ['meta' => $order->agent->meta],
           'store'        => ['meta' => $order->store->meta],
+          'state'        => ['meta' => $this->buildStateMeta('salesreturn',YII::$app->params['moysklad']['salesReturnState1'])],
           'demand'       => ['meta' => $demand->meta],
           'applicable'   => false,
           'positions'    => $positions,

@@ -20,13 +20,6 @@ class DemandUpdateHandler
 {
     private function resolveCashRegisterCodeForOrder(object $configData): string
     {
-        // project id из MS-заказа (uuid)
-        // $projectId = (string)($order->project->id ?? '');
-
-        // if ($projectId === '') {
-        //     return '';
-        // }
-
         $cfg = OrdersConfigTable::find()
             ->select(['cash_register'])
             ->where(['id' => $configData->id])
@@ -461,7 +454,8 @@ class DemandUpdateHandler
                         "DO_RETURN SKIP (already exists) salesreturn={$srId}\n",
                         FILE_APPEND
                     );
-                } else {
+                }
+                else {
 
                     // 2) Создаём salesreturn в МС
                     $resSr = $moysklad->createSalesReturnFromDemand($msOrder, $demand);
@@ -495,7 +489,9 @@ class DemandUpdateHandler
 
                     // лучше хранить именно ID статуса, а не href
                     $srStateHref = $sr->state->meta->href ?? null;
-                    $row->salesreturn_state_id = $srStateHref ? basename($srStateHref) : null;
+                    $row->salesreturn_state_id = $srStateHref
+                        ? basename($srStateHref)
+                        : 'CREATED'; // или любой тех. placeholder
 
                     $row->created_at = $row->created_at ?: date('Y-m-d H:i:s');
                     $row->updated_at = date('Y-m-d H:i:s');

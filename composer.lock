@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "1f4dfaa45cf3b4544853eb908c86ec2e",
+    "content-hash": "befed8225e5c2e7fa10befbc1858a145",
     "packages": [
         {
             "name": "bower-asset/bootstrap",
@@ -1044,6 +1044,61 @@
                 "simple-cache"
             ],
             "time": "2021-10-29T13:26:27+00:00"
+        },
+        {
+            "name": "sendpulse/rest-api",
+            "version": "2.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/sendpulse/sendpulse-rest-api-php.git",
+                "reference": "e1a81e2f68dc29508c8a8a49b3496e08911193f0"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/sendpulse/sendpulse-rest-api-php/zipball/e1a81e2f68dc29508c8a8a49b3496e08911193f0",
+                "reference": "e1a81e2f68dc29508c8a8a49b3496e08911193f0",
+                "shasum": ""
+            },
+            "require": {
+                "ext-curl": "*",
+                "ext-json": "*",
+                "php": ">=7.1.0"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Sendpulse\\RestApi\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Maksym Ustymenko",
+                    "email": "m.ustymenko@sendpulse.com"
+                },
+                {
+                    "name": "Alexey Moroz",
+                    "email": "a.moroz@sendpulse.com"
+                },
+                {
+                    "name": "Evgeniy Bilovol",
+                    "email": "e.bilovol@sendpulse.com"
+                }
+            ],
+            "description": "Sendpulse REST API client library",
+            "keywords": [
+                "api",
+                "rest",
+                "sendpulse"
+            ],
+            "support": {
+                "issues": "https://github.com/sendpulse/sendpulse-rest-api-php/issues",
+                "source": "https://github.com/sendpulse/sendpulse-rest-api-php/tree/2.0"
+            },
+            "time": "2023-10-11T14:30:57+00:00"
         },
         {
             "name": "symfony/deprecation-contracts",
@@ -5782,5 +5837,5 @@
         "php": ">=7.4.0"
     },
     "platform-dev": [],
-    "plugin-api-version": "1.1.0"
+    "plugin-api-version": "2.6.0"
 }

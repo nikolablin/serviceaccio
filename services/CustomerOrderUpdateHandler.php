@@ -187,7 +187,7 @@ class CustomerOrderUpdateHandler
 
         /**
          * 6️⃣ Связь с отгрузкой (если есть)
-         */
+         */ 
         $link = OrdersDemands::findOne([
             'moysklad_order_id' => (string)$order->id,
         ]);

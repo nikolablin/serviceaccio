@@ -264,10 +264,10 @@ class CronController extends Controller
             $link         = false;
             $orderProduct = $productsData->data[0];
 
-            $productWebsiteData = self::getProductWebDataBySku($orderProduct->attributes->offer->code);
+            $productWebsiteData = $website->getProductWebDataBySku($orderProduct->attributes->offer->code);
 
-            if(!empty(trim($productWebsiteData['kaspi_code']))){
-              $link = 'https://kaspi.kz/shop/review/productreview?orderCode=' . $order->attributes->code . '&productCode=' . trim($productWebsiteData['kaspi_code']) . '&rating=5';
+            if(!empty(trim($productWebsiteData->kaspi_code))){
+              $link = 'https://kaspi.kz/shop/review/productreview?orderCode=' . $order->attributes->code . '&productCode=' . trim($productWebsiteData->kaspi_code) . '&rating=5';
             }
 
             if($link){
@@ -310,7 +310,7 @@ class CronController extends Controller
                     case 'ital':
                       break;
                     default:
-                      $telegram->sendTelegramMessage('Клиент ' . $customer->name . ' получил WhatsApp-сообщение с просьбой оставить отзыв на товар ' . $productWebsiteData['title'] . ' в заказе ' . $order->attributes->code . ' (' . $shopkey . ')' . '.', 'kaspi');
+                      $telegram->sendTelegramMessage('Клиент ' . $customer->name . ' получил WhatsApp-сообщение с просьбой оставить отзыв на товар ' . $productWebsiteData->title . ' в заказе ' . $order->attributes->code . ' (' . $shopkey . ')' . '.', 'kaspi');
                   }
                 }
               }
@@ -352,61 +352,156 @@ class CronController extends Controller
 
         foreach ($ordersAll as $order) {
 
-          file_put_contents(__DIR__ . '/../logs/kaspi/kaspiCancelledOrders.txt', date('d.m.Y H:i') . PHP_EOL . print_r($order->attributes->code,true) . PHP_EOL . PHP_EOL,FILE_APPEND);
+          $code = (string)($order->attributes->code ?? '');
+
+          file_put_contents(__DIR__ . '/../logs/kaspi/kaspiCancelledOrders.txt', date('d.m.Y H:i') . PHP_EOL . print_r($code,true) . PHP_EOL . PHP_EOL,FILE_APPEND);
+          file_put_contents(__DIR__ . '/../logs/kaspi/kaspiCancelledOrders.txt', date('d.m.Y H:i') . PHP_EOL . print_r($order,true) . PHP_EOL . PHP_EOL,FILE_APPEND);
 
           if($order->attributes->status == 'CANCELLED'){} else { continue; }
 
-          $dbOrder = KaspiOrders::findByCode($order->attributes->code);
+          $dbOrder = KaspiOrders::findByCode($code);
 
-          if($dbOrder){
-            $ordersMsInfo = $moysklad->checkOrderInMoySkladByMarketplaceCode($order->attributes->code);
+          if (!$dbOrder) {
+            continue;
+          }
 
-            if($ordersMsInfo){
-              foreach ($ordersMsInfo as $iorder) {
-                $demandsList = $iorder->demands;
+          if ($dbOrder->status === 'cancelled') {
+            continue;
+          }
 
-                foreach ($demandsList as $demand) {
-                  $demandId     = basename($demand->meta->href);
+          $prevStatus = (string)$dbOrder->status;
+
+          $ordersMsInfo = $moysklad->checkOrderInMoySkladByMarketplaceCode($code);
+          if (!$ordersMsInfo) {
+            continue;
+          }
+
+
+          foreach ($ordersMsInfo as $iorder) {
+              $demandsList = $iorder->demands ?? [];
+              foreach ($demandsList as $demand) {
+
+                  $demandId = '';
+                  if (isset($demand->meta->href)) {
+                      $demandId = basename((string)$demand->meta->href);
+                  }
+                  if ($demandId === '') {
+                      continue;
+                  }
+
                   $setTgMessage = false;
+                  $returnType   = null;
 
-                  switch($dbOrder->status){
-                    case 'created': // 0ba2e09c-cda1-11eb-0a80-03110030c70c - статус Без чека - Возврат на склад
-                      $demandStateMeta = $moysklad->buildStateMeta('demand', YII::$app->params['moysklad']['demandUpdateHandler']['stateDemandReturnNoCheck']);
-                      $moysklad->updateDemandState($demandId,$demandStateMeta);
-                      $returnType = 'Без чека - Возврат на склад';
-                      file_put_contents(__DIR__ . '/../logs/kaspi/kaspiCancelledOrders.txt', date('d.m.Y') . PHP_EOL . 'CREATED' . PHP_EOL . print_r($order,true) . PHP_EOL . PHP_EOL,FILE_APPEND);
-                      $setTgMessage = true;
-                      break;
-                    case 'assemble': // 2a6c9db5-a7c4-11ed-0a80-10870015e950 - статус Провести возврат
-                      $demandStateMeta = $moysklad->buildStateMeta('demand', YII::$app->params['moysklad']['demandUpdateHandler']['stateDemandDoReturn']);
-                      $moysklad->updateDemandState($demandId,$demandStateMeta);
-                      $returnType = 'Провести возврат';
-                      file_put_contents(__DIR__ . '/../logs/kaspi/kaspiCancelledOrders.txt', date('d.m.Y') . PHP_EOL . 'ASSEMBLED' . PHP_EOL . print_r($order,true) . PHP_EOL . PHP_EOL,FILE_APPEND);
-                      $setTgMessage = true;
-                      break;
+                  switch ($prevStatus) {
+                      case 'created': // Без чека - Возврат на склад
+                          $demandStateMeta = $moysklad->buildStateMeta(
+                              'demand',
+                              Yii::$app->params['moysklad']['demandUpdateHandler']['stateDemandReturnNoCheck']
+                          );
+                          $moysklad->updateDemandState($demandId, $demandStateMeta);
+                          $returnType   = 'Без чека - Возврат на склад';
+                          $setTgMessage = true;
+
+                          file_put_contents(
+                              __DIR__ . '/../logs/kaspi/kaspiCancelledOrders.txt',
+                              date('d.m.Y') . PHP_EOL . 'CREATED' . PHP_EOL . print_r($order, true) . PHP_EOL . PHP_EOL,
+                              FILE_APPEND
+                          );
+                          break;
+
+                      case 'assemble': // Провести возврат
+                          $demandStateMeta = $moysklad->buildStateMeta(
+                              'demand',
+                              Yii::$app->params['moysklad']['demandUpdateHandler']['stateDemandDoReturn']
+                          );
+                          $moysklad->updateDemandState($demandId, $demandStateMeta);
+                          $returnType   = 'Провести возврат';
+                          $setTgMessage = true;
+
+                          file_put_contents(
+                              __DIR__ . '/../logs/kaspi/kaspiCancelledOrders.txt',
+                              date('d.m.Y') . PHP_EOL . 'ASSEMBLED' . PHP_EOL . print_r($order, true) . PHP_EOL . PHP_EOL,
+                              FILE_APPEND
+                          );
+                          break;
+
+                      default:
+                          // если хочешь — можно уведомлять и по другим статусам
+                          // $returnType = 'Отменён (статус в БД: ' . $prevStatus . ')';
+                          // $setTgMessage = true;
+                          break;
                   }
 
                   $dbOrder->updateStatus('cancelled');
 
-                  if($setTgMessage){
-                    $tgMessage = 'Требуется оформить возврат для заказа Каспи #' . $order->attributes->code . PHP_EOL;
-                    $tgMessage .= 'Тип возврата - ' . $returnType . PHP_EOL;
-                    $tgMessage .= 'Магазин Каспи - ' . $shopkey;
+                  if ($setTgMessage) {
+                      $tgMessage  = 'Требуется оформить возврат для заказа Каспи #' . $code . PHP_EOL;
+                      $tgMessage .= 'Тип возврата - ' . $returnType . PHP_EOL;
+                      $tgMessage .= 'Магазин Каспи - ' . $shopkey;
 
-                    $telegram->sendTelegramMessage($tgMessage, 'cancelled');
+                      $res = $telegram->sendTelegramMessage($tgMessage, 'cancelled');
+
+                      file_put_contents(
+                          __DIR__ . '/../logs/kaspi/kaspiCancelledOrders.txt',
+                          'TG_RES ' . $code . ' :: ' . print_r($res, true) . PHP_EOL . str_repeat('-', 60) . PHP_EOL,
+                          FILE_APPEND
+                      );
                   }
-                }
-
               }
-            }
           }
 
+
+
+
+
+
+
+          // if($dbOrder){
+          //   $ordersMsInfo = $moysklad->checkOrderInMoySkladByMarketplaceCode($code);
+          //
+          //   if($ordersMsInfo){
+          //     foreach ($ordersMsInfo as $iorder) {
+          //       $demandsList = $iorder->demands;
+          //
+          //       foreach ($demandsList as $demand) {
+          //         $demandId     = basename($demand->meta->href);
+          //         $setTgMessage = false;
+          //
+          //         switch($dbOrder->status){
+          //           case 'created': // 0ba2e09c-cda1-11eb-0a80-03110030c70c - статус Без чека - Возврат на склад
+          //             $demandStateMeta = $moysklad->buildStateMeta('demand', YII::$app->params['moysklad']['demandUpdateHandler']['stateDemandReturnNoCheck']);
+          //             $moysklad->updateDemandState($demandId,$demandStateMeta);
+          //             $returnType = 'Без чека - Возврат на склад';
+          //             file_put_contents(__DIR__ . '/../logs/kaspi/kaspiCancelledOrders.txt', date('d.m.Y') . PHP_EOL . 'CREATED' . PHP_EOL . print_r($order,true) . PHP_EOL . PHP_EOL,FILE_APPEND);
+          //             $setTgMessage = true;
+          //             break;
+          //           case 'assemble': // 2a6c9db5-a7c4-11ed-0a80-10870015e950 - статус Провести возврат
+          //             $demandStateMeta = $moysklad->buildStateMeta('demand', YII::$app->params['moysklad']['demandUpdateHandler']['stateDemandDoReturn']);
+          //             $moysklad->updateDemandState($demandId,$demandStateMeta);
+          //             $returnType = 'Провести возврат';
+          //             file_put_contents(__DIR__ . '/../logs/kaspi/kaspiCancelledOrders.txt', date('d.m.Y') . PHP_EOL . 'ASSEMBLED' . PHP_EOL . print_r($order,true) . PHP_EOL . PHP_EOL,FILE_APPEND);
+          //             $setTgMessage = true;
+          //             break;
+          //         }
+          //
+          //         $dbOrder->updateStatus('cancelled');
+          //
+          //         if($setTgMessage){
+          //           $tgMessage = 'Требуется оформить возврат для заказа Каспи #' . $order->attributes->code . PHP_EOL;
+          //           $tgMessage .= 'Тип возврата - ' . $returnType . PHP_EOL;
+          //           $tgMessage .= 'Магазин Каспи - ' . $shopkey;
+          //
+          //           $telegram->sendTelegramMessage($tgMessage, 'cancelled');
+          //         }
+          //       }
+          //
+          //     }
+          //   }
+          // }
+
         }
-
       }
-
     }
-
 
     /*
     Закрытие смен всех касс.

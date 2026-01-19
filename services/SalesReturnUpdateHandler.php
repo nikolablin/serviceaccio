@@ -19,6 +19,9 @@ class SalesReturnUpdateHandler
 
     public function handle(object $event): void
     {
+      echo 'ok';
+      exit();
+
         if (
             ($event->meta->type ?? null) !== 'salesreturn'
             || ($event->action ?? null) !== 'UPDATE'
@@ -39,9 +42,6 @@ class SalesReturnUpdateHandler
 
 
 
-
-echo 'ok';
-exit();
 
 
 

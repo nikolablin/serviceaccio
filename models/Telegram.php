@@ -33,6 +33,7 @@ class Telegram extends Model {
         break;
     }
 
+    file_put_contents(__DIR__ . '/../logs/telegram/sentMessage.txt', date('d.m.Y') . PHP_EOL . 'https://api.telegram.org/bot' . $telegramData->token . '/sendMessage?disable_web_page_preview=true&parse_mode=html&chat_id=' . $chatId . '&text='.urlencode($msg) . PHP_EOL . PHP_EOL,FILE_APPEND);
 
     $url = 'https://api.telegram.org/bot' . $telegramData->token . '/sendMessage?disable_web_page_preview=true&parse_mode=html&chat_id=' . $chatId . '&text='.urlencode($msg);
 
