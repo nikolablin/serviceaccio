@@ -7,85 +7,85 @@ use app\models\Whatsapp;
 use app\models\Moysklad;
 
 
-ini_set('display_errors', '1');
-error_reporting(E_ALL);
-
-$moysklad = new Moysklad();
-
-$orderHref = 'https://api.moysklad.ru/api/remap/1.2/entity/customerorder/42906f91-f2e9-11f0-0a80-1145001f54f6';
-
-$order = $moysklad->getHrefData(
-    $orderHref . '?expand=project,state,positions,paymentType,attributes'
-);
-
-$demand = $order->demands[0];
-
-$demand = $moysklad->getHrefData(
-  $demand->meta->href . '?expand=project,state,positions,paymentType,attributes'
-);
-
-$returns = $demand->returns;
-
-$batchSize   = 30;   // сколько удаляем за 1 batch
-$maxTotal    = 300;  // общий лимит
-$pause       = 3;    // пауза между batch
-$payload     = [];
-$c           = 0;
-
-foreach ($returns as $return) {
-
-    if ($c >= $maxTotal) {
-        break;
-    }
-
-    $href = (string)($return->meta->href ?? '');
-    if ($href === '') {
-        continue;
-    }
-
-    $payload[] = [
-        'meta' => [
-            'href'      => $href,
-            'type'      => 'salesreturn',
-            'mediaType' => 'application/json',
-        ],
-    ];
-
-    $c++;
-
-    // когда набрали batch
-    if (count($payload) === $batchSize) {
-
-        $resp = $moysklad->batchDeleteEntity(
-            'salesreturn/delete',
-            $payload
-        );
-
-        // при необходимости — лог
-        /*
-        file_put_contents(__DIR__ . '/../logs/ms_service/delete_salesreturn_batch.txt',
-            date('d.m.Y H:i:s') . PHP_EOL .
-            "batch size=" . count($payload) . PHP_EOL .
-            print_r($resp, true) . PHP_EOL .
-            str_repeat('-', 60) . PHP_EOL,
-            FILE_APPEND
-        );
-        */
-
-        $payload = []; // очищаем batch
-        sleep($pause);
-    }
-}
-
-/**
- * если остался хвост (< batchSize)
- */
-if (!empty($payload)) {
-    $resp = \app\models\Moysklad::batchDeleteEntity(
-        'salesreturn/delete',
-        $payload
-    );
-}
+// ini_set('display_errors', '1');
+// error_reporting(E_ALL);
+//
+// $moysklad = new Moysklad();
+//
+// $orderHref = 'https://api.moysklad.ru/api/remap/1.2/entity/customerorder/42906f91-f2e9-11f0-0a80-1145001f54f6';
+//
+// $order = $moysklad->getHrefData(
+//     $orderHref . '?expand=project,state,positions,paymentType,attributes'
+// );
+//
+// $demand = $order->demands[0];
+//
+// $demand = $moysklad->getHrefData(
+//   $demand->meta->href . '?expand=project,state,positions,paymentType,attributes'
+// );
+//
+// $returns = $demand->returns;
+//
+// $batchSize   = 30;   // сколько удаляем за 1 batch
+// $maxTotal    = 300;  // общий лимит
+// $pause       = 3;    // пауза между batch
+// $payload     = [];
+// $c           = 0;
+//
+// foreach ($returns as $return) {
+//
+//     if ($c >= $maxTotal) {
+//         break;
+//     }
+//
+//     $href = (string)($return->meta->href ?? '');
+//     if ($href === '') {
+//         continue;
+//     }
+//
+//     $payload[] = [
+//         'meta' => [
+//             'href'      => $href,
+//             'type'      => 'salesreturn',
+//             'mediaType' => 'application/json',
+//         ],
+//     ];
+//
+//     $c++;
+//
+//     // когда набрали batch
+//     if (count($payload) === $batchSize) {
+//
+//         $resp = $moysklad->batchDeleteEntity(
+//             'salesreturn/delete',
+//             $payload
+//         );
+//
+//         // при необходимости — лог
+//         /*
+//         file_put_contents(__DIR__ . '/../logs/ms_service/delete_salesreturn_batch.txt',
+//             date('d.m.Y H:i:s') . PHP_EOL .
+//             "batch size=" . count($payload) . PHP_EOL .
+//             print_r($resp, true) . PHP_EOL .
+//             str_repeat('-', 60) . PHP_EOL,
+//             FILE_APPEND
+//         );
+//         */
+//
+//         $payload = []; // очищаем batch
+//         sleep($pause);
+//     }
+// }
+//
+// /**
+//  * если остался хвост (< batchSize)
+//  */
+// if (!empty($payload)) {
+//     $resp = \app\models\Moysklad::batchDeleteEntity(
+//         'salesreturn/delete',
+//         $payload
+//     );
+// }
 
 
 

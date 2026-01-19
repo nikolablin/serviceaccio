@@ -36,7 +36,7 @@ class CustomerOrderUpdateHandler
         }
 
         $order = $moysklad->getHrefData(
-            $orderHref . '?expand=project,state,positions,paymentType,attributes'
+            $orderHref . '?expand=project,state,positions,paymentType,attributes,store'
         );
 
         if (empty($order->id)) {
@@ -89,8 +89,9 @@ class CustomerOrderUpdateHandler
         /**
          * ✅ текущий статус заказа (для истории переходов)
          */
-        $stateHref = $order->state->meta->href ?? null;
-        $stateId   = $stateHref ? basename($stateHref) : null;
+        $stateHref    = $order->state->meta->href ?? null;
+        $stateId      = $stateHref ? basename($stateHref) : null;
+        $isOrgProject = (Yii::$app->params['moysklad']['organizationProject'] !== '' && (string)$projectId === Yii::$app->params['moysklad']['organizationProject']);
 
         // старый статус (после upsert уже есть запись)
         $oldStateId = Orders::find()
@@ -158,7 +159,8 @@ class CustomerOrderUpdateHandler
                   $res = $moysklad->deleteDemand($demId);
 
                   file_put_contents(__DIR__ . '/../logs/ms_service/updatecustomerorder.txt',
-                      "ROLLBACK demand id={$demId} ok=" . (int)$res['ok'] . " http={$res['code']}\n",
+                      "ROLLBACK demand id={$demId} ok=" . (int)$res['ok'] . " http={$res['code']}\n" .
+                      print_r($res,true),
                       FILE_APPEND
                   );
               }
@@ -187,7 +189,7 @@ class CustomerOrderUpdateHandler
 
         /**
          * 6️⃣ Связь с отгрузкой (если есть)
-         */ 
+         */
         $link = OrdersDemands::findOne([
             'moysklad_order_id' => (string)$order->id,
         ]);
@@ -202,6 +204,7 @@ class CustomerOrderUpdateHandler
 
             // 0) Быстрая проверка: если уже есть связь — это update ветка, а не create
             $link = OrdersDemands::findOne(['moysklad_order_id' => (string)$order->id]);
+            $options = ['sync_positions' => true];
 
             // если связь есть и не пустой moysklad_demand_id — можно спокойно sync/update
             if ($link) {
@@ -215,7 +218,7 @@ class CustomerOrderUpdateHandler
                     $order,
                     $orderId,
                     $configData,
-                    ['sync_positions' => true]
+                    $options
                 );
 
                 if ($demand && !empty($demand->id)) {
@@ -299,12 +302,11 @@ class CustomerOrderUpdateHandler
 
         if ($invoiceIssuedState && $stateId === $invoiceIssuedState) {
 
-            $existsLocal = OrdersInvoicesOut::find()
+            // Создаем счет покупателю
+            $existsInvoiceOutLocal = OrdersInvoicesOut::find()
                 ->where(['moysklad_order_id' => (string)$order->id])
                 ->exists();
-
-            if (!$existsLocal) {
-
+            if (!$existsInvoiceOutLocal) {
                 $invoice = $moysklad->createInvoiceOutFromOrder($order, $configData);
 
                 // ✅ добавь лог, если не создался
@@ -330,6 +332,107 @@ class CustomerOrderUpdateHandler
                         (string)$order->id
                     );
                 }
+            }
+
+            $existsMoneyInLocal = OrdersMoneyin::find()
+                ->where(['moysklad_order_id' => (string)$order->id])
+                ->exists();
+
+            if(!$existsMoneyInLocal){
+              // Узнаем, какой тип платежа требуется
+              $paymentAttrId  = Yii::$app->params['moysklad']['paymentTypeAttrId'] ?? null;
+              $paymentTypeId  = $paymentAttrId ? $moysklad->getAttributeValueId($order, $paymentAttrId) : null;
+              $isCash         = ($paymentTypeId === (Yii::$app->params['moysklad']['cashPaymentTypeId'] ?? ''));
+              $docType        = $isCash ? 'cashin' : 'paymentin';
+
+              $row = new OrdersMoneyin();
+              $row->order_id           = (int)$orderId;
+              $row->moysklad_order_id  = (string)$order->id;
+              $row->moysklad_demand_id = (string)$demand->id;
+              $row->doc_type           = $docType;
+              $row->moysklad_doc_id    = '';
+              $row->moysklad_state_id  = '';
+              $row->applicable         = 0;
+              $row->created_at         = date('Y-m-d H:i:s');
+              $row->updated_at         = date('Y-m-d H:i:s');
+
+              try {
+                  $row->save(false); // тут должен сработать UNIQUE(demand_id, doc_type)
+              } catch (\Throwable $e) {
+                  file_put_contents(__DIR__ . '/../logs/ms_service/updatecustomerorder.txt',
+                      "RESERVE FAIL demand={$demand->id} docType={$docType} msg={$e->getMessage()}\n",
+                      FILE_APPEND
+                  );
+              }
+
+              // Создаём документ в МС
+              $orderNum = $moysklad->getProductAttribute($order->attributes,'a7f0812d-a0a3-11ed-0a80-114f003fc7f9');
+              $orderNum = (!$orderNum) ? '-' : $orderNum->value;
+
+              $paymentType = $moysklad->getProductAttribute($order->attributes,YII::$app->params['moysklad']['paymentTypeAttrId']);
+              $paymentTypeMeta = (!$paymentType) ? false : $paymentType->value;
+
+              if(in_array($order->project->id,YII::$app->params['moysklad']['incomeIssues']['marketplaceProjects'])){
+                $incomeIssueAttrVal = YII::$app->params['moysklad']['incomeIssues']['marketProdaji'];
+              }
+              else {
+                $incomeIssueAttrVal = YII::$app->params['moysklad']['incomeIssues']['roznProdaji'];
+              }
+
+              switch($docType){
+                case 'cashin':
+                  $incomeIssueAttr = YII::$app->params['moysklad']['incomeIssues']['cashinIssueAttrId'];
+                  break;
+                default:
+                  $incomeIssueAttr = YII::$app->params['moysklad']['incomeIssues']['paymentIssueAttrId'];
+              }
+
+              $resDoc = ($docType === 'cashin')
+                  ? $moysklad->createCashInFromOrder($order, $demand, $orderNum, $paymentTypeMeta, $incomeIssueAttr, $incomeIssueAttrVal,YII::$app->params['moysklad']['cashInStateWaiting'])
+                  : $moysklad->createPaymentInFromOrder($order, $demand, $orderNum, $paymentTypeMeta, $incomeIssueAttr, $incomeIssueAttrVal,YII::$app->params['moysklad']['paymentInStateSchetVistavlen']);
+
+              if (is_array($resDoc) && empty($resDoc['ok'])) {
+                  file_put_contents(__DIR__ . '/../logs/ms_service/updatecustomerorder.txt',
+                      strtoupper($docType) . " CREATE FAIL demand={$demand->id} order={$order->id} http={$resDoc['code']} err={$resDoc['err']} resp={$resDoc['raw']}\n",
+                      FILE_APPEND
+                  );
+              }
+
+              $doc   = is_array($resDoc) ? ($resDoc['json'] ?? null) : $resDoc;
+              $docId = (string)($doc->id ?? '');
+
+              if ($docId === '') {
+                  file_put_contents(__DIR__ . '/../logs/ms_service/updatecustomerorder.txt',
+                      strtoupper($docType) . " CREATE FAIL: empty docId demand={$demand->id}\n",
+                      FILE_APPEND
+                  );
+              }
+
+              // 3) Статус "Ожидает поступления" + applicable=false
+              if ($docType === 'cashin') {
+                  $waiting = Yii::$app->params['moysklad']['cashInStateWaiting'] ?? '';
+                  if ($waiting !== '') {
+                      $moysklad->updateCashInState($docId, $moysklad->buildStateMeta('cashin', $waiting));
+                  }
+                  $moysklad->updateCashInApplicable($docId, false);
+              } else {
+                  $waiting = Yii::$app->params['moysklad']['paymentInStateWaiting'] ?? '';
+                  if ($waiting !== '') {
+                      $moysklad->updatePaymentInState($docId, $moysklad->buildStateMeta('paymentin', $waiting));
+                  }
+                  $moysklad->updatePaymentInApplicable($docId, false);
+              }
+
+              // 4) Финализируем резерв
+              $row->moysklad_doc_id   = $docId;
+              $row->moysklad_state_id = $waiting;
+              $row->updated_at        = date('Y-m-d H:i:s');
+              $row->save(false);
+
+              file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
+                  "MONEYIN OK demand={$demand->id} docType={$docType} docId={$docId}\n",
+                  FILE_APPEND
+              );
             }
         }
 

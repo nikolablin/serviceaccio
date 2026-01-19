@@ -671,7 +671,6 @@ class DemandUpdateHandler
                         "RESERVE FAIL demand={$demand->id} docType={$docType} msg={$e->getMessage()}\n",
                         FILE_APPEND
                     );
-                    continue;
                 }
 
                 // 2) Создаём документ в МС

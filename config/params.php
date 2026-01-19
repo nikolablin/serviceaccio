@@ -67,6 +67,14 @@ return [
       'secret'  => '257d30d3c90d55ae84ca661758347ea6',
       'bot_id'  => '626546739d06f4651210b358',
     ],
+
+    'moyskladv2' => [
+
+      'login'     => 'online@2336623',
+      'password'  => 'Gj953928$',
+
+    ],
+
     'moysklad' => [
       'loopGuardTtl' => 10,
       'allowDemandStates' => [
@@ -121,6 +129,7 @@ return [
       // money-in states:
       'paymentInStateWaiting' => '529980fb-346a-11eb-0a80-04cd00042953',
       'cashInStateWaiting'    => 'fc9b310f-2738-11eb-0a80-0902001c1e9c',
+      'paymentInStateSchetVistavlen' => '6e980f8b-1a83-11f0-0a80-0dbb000314b7',
 
       // Платежные Статьи доходов
       'incomeIssues' => [
@@ -160,6 +169,7 @@ return [
         'ital'  => '98777142-d26a-11f0-0a80-1be40016550a', // 🔴 Ital Trade
       ],
       'woltProject' => 'a463b9da-d26c-11f0-0a80-1a6b0016a57a',
+      'organizationProject' => '6b625db1-d270-11f0-0a80-1512001756b3', // Юридические лица
       'kaspiTokens' => [
         'accio' => 'dbU852Hq+JDbq5OiGDE+lZOkbpKgNX/qFfYfQTBYU60=',
         'tutto' => 'BiQdZihpwlTXKY2Ny6mCQiVnPHw8YwuuXExf6o1PB+8=',

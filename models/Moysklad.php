@@ -7,238 +7,20 @@ use app\models\OrdersDemands;
 
 class Moysklad extends Model
 {
-  public function getMSLoginPassword()
-  {
-    return (object)array('login' => 'online@2336623', 'password' => 'Gj953928$');
-  }
-
-  public function getCustomCategories()
-  {
-    $accessdata = self::getMSLoginPassword();
-
-    $response   = array();
-
-    $curl = curl_init();
-    curl_setopt_array($curl, array(
-      CURLOPT_URL => 'https://api.moysklad.ru/api/remap/1.2/entity/productfolder',
-      CURLOPT_RETURNTRANSFER => true,
-      CURLOPT_ENCODING => '',
-      CURLOPT_MAXREDIRS => 10,
-      CURLOPT_TIMEOUT => 0,
-      CURLOPT_FOLLOWLOCATION => true,
-      CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-      CURLOPT_CUSTOMREQUEST => 'GET',
-      CURLOPT_HTTPHEADER => array(
-        'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
-        'Accept-Encoding: gzip',
-        'Connection: Keep-Alive'
-      ),
-    ));
-    $httpcode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-    $content  = json_decode( curl_exec($curl) );
-    curl_close($curl);
-
-    $excluding =  [
-                    '10119948-b295-11ed-0a80-0bd4000cdf58',
-                    '2e850b78-b295-11ed-0a80-08f7000c74e1',
-                    '380bcff6-b295-11ed-0a80-0cc4000c73b3',
-                    '4204ed9b-b295-11ed-0a80-045f000c7c8a',
-                    '434bb54d-f400-11ea-0a80-0002000441b1',
-                    '5e454570-73b5-11ed-0a80-026700286f67',
-                    '830c746b-b295-11ed-0a80-0256000d4135',
-                    'b7194743-98d8-11ee-0a80-0e9e0051e70b',
-                    'b2d2f781-b2ae-11ed-0a80-0eb20016a4d0',
-                    'bd1dc13a-98d8-11ee-0a80-039700524270',
-                    'c6e77f74-abc6-11ee-0a80-138b00495471',
-                    'c742902b-98d8-11ee-0a80-017900506a3f',
-                    'e7386eb7-a0c1-11ee-0a80-0fee0026fa81',
-                    'edc6cb68-abc6-11ee-0a80-100e004c4f76',
-                    'fb7526e0-9ed2-11ee-0a80-051700027af4',
-                    'f9084bdc-f059-11ea-0a80-05f2001b899c',
-                    '5b238a3d-9ed3-11ee-0a80-0e1f0002b4ad',
-                    '6cf62f6b-abc6-11ee-0a80-100e004c4342',
-                    'e11cf86c-9ed2-11ee-0a80-01940002e543',
-                    '6d5eb0c4-9ed2-11ee-0a80-10d50002c2fd',
-                    'd15cd325-9ed2-11ee-0a80-026e00027a51',
-                    '6f1eab0e-ee9c-11ea-0a80-005d0009039b',
-                    'e95e2b2d-b345-11ed-0a80-0eb200248c0c',
-                    '74518a46-b295-11ed-0a80-045f000c89a1',
-                    '942f4207-98d8-11ee-0a80-107d0052548e',
-                    'a79bacc7-98d8-11ee-0a80-146900510e66',
-                    '9fe95edd-98d8-11ee-0a80-139800510e4f',
-                    'aeef9e68-98d8-11ee-0a80-0cca005116e3'
-                  ];
-    $cats = [];
-    foreach ($content->rows as $row) {
-      if(in_array($row->id,$excluding)){ continue; }
-      $cats[$row->id] = (($row->pathName != '') ? $row->pathName . '/' : '') . $row->name;
+    public function getMSLoginPassword()
+    {
+      return (object)array('login' => 'online@2336623', 'password' => 'Gj953928$');
     }
 
-    asort($cats);
+    public function getCustomCategories()
+    {
+      $accessdata = self::getMSLoginPassword();
 
-    // $cats = [
-    //           'e0b4cb97-7a81-11ec-0a80-01ce00043cad' => 'Аксессуары/Coffee to Go и Десерты',
-    //           '7fecb3b0-f713-11ea-0a80-04cf002f953e' => 'Аксессуары/Посуда Nespresso',
-    //           '4b224093-ee9c-11ea-0a80-02120008b5a8' => 'Аксессуары',
-    //           '1b7ee889-3b0e-11ec-0a80-064d0035a678' => 'Аксессуары/Держатели Капсул',
-    //           '020a6f71-3b0e-11ec-0a80-036f0005feb3' => 'Аксессуары/Капучинаторы',
-    //           '8ec6deab-253b-11ed-0a80-0d5c000f4f86' => 'Аксессуары/Кофемолки',
-    //           '3a739644-c404-11ed-0a80-0556004249fa' => 'Аксессуары/Посуда Vergnano',
-    //           '3f36f6cf-3b0e-11ec-0a80-013400020941' => 'Аксессуары/Средства для очистки',
-    //           '765f1d59-a76f-11ec-0a80-0ed700178415' => 'Кофе/Зерновой Кофе',
-    //           '9483bf44-4670-11ee-0a80-0dbe001357df' => 'Кофе/Зерновой Кофе/Borbone',
-    //           'f8d39fb0-d558-11ee-0a80-06b8005f601a' => 'Кофе/Зерновой Кофе/Bushido',
-    //           'a554194d-223f-11ef-0a80-16f8000506d7' => 'Кофе/Зерновой Кофе/Caffe Moreno',
-    //           'ffcd7565-d351-11ee-0a80-0129002f7ab4' => 'Кофе/Зерновой Кофе/Carte Noire',
-    //           'db3de755-d558-11ee-0a80-0567005ff7b5' => 'Кофе/Зерновой Кофе/Egoiste',
-    //           'ed20f1be-1a47-11ed-0a80-0c740011706a' => 'Кофе/Зерновой Кофе/Gimoka',
-    //           'f50e40e8-4188-11ee-0a80-005d00068b5e' => 'Кофе/Зерновой Кофе/Illy',
-    //           '9da1584e-d352-11ee-0a80-06b8002ea4ac' => 'Кофе/Зерновой Кофе/Kimbo',
-    //           'cfd97a20-d6fd-11ee-0a80-15790012ade7' => 'Кофе/Зерновой Кофе/Lavazza',
-    //           'c43a7ba3-1a47-11ed-0a80-0c74001166ef' => 'Кофе/Зерновой Кофе/Lollo',
-    //           '286d8157-d559-11ee-0a80-0cba0060ac12' => 'Кофе/Зерновой Кофе/Movenpick',
-    //           '144bc593-1a48-11ed-0a80-05c000104151' => 'Кофе/Зерновой Кофе/Vergnano',
-    //           'a2164a91-4670-11ee-0a80-07c400139287' => 'Кофе/Капсульный кофе/Dolce Gusto/Borbone',
-    //           'ae60ea3d-1a48-11ed-0a80-035100127f68' => 'Кофе/Капсульный кофе/Dolce Gusto/Foodness',
-    //           '37cc9b6e-a76f-11ec-0a80-068d001d6dbb' => 'Кофе/Капсульный кофе/Dolce Gusto/Gimoka',
-    //           '3ef37783-a76f-11ec-0a80-0ed70017756f' => 'Кофе/Капсульный кофе/Dolce Gusto/Kimbo',
-    //           'c0967c1a-59df-11ee-0a80-02d90019a33a' => 'Кофе/Капсульный кофе/Dolce Gusto/Lavazza',
-    //           '6f46f281-1a47-11ed-0a80-0dc000112a19' => 'Кофе/Капсульный кофе/Dolce Gusto/Lollo',
-    //           'dfe2c307-a76d-11ec-0a80-04e300185548' => 'Кофе/Капсульный кофе/Dolce Gusto/Nescafe',
-    //           '87b8d37c-1a47-11ed-0a80-0b95001036a8' => 'Кофе/Капсульный кофе/Dolce Gusto/Vergnano',
-    //           'c215f4ab-253a-11ed-0a80-0e91000e5649' => 'Кофе/Капсульный кофе/Dolce Gusto/Starbucks',
-    //           'ef7e0001-ee9b-11ea-0a80-005d0008f105' => 'Кофе/Капсульный кофе/Nespresso Original',
-    //           'af62ebb2-4670-11ee-0a80-03500012ca1a' => 'Кофе/Капсульный кофе/Nespresso Original/Borbone',
-    //           '5df2e0bd-a76f-11ec-0a80-0749001844e6' => 'Кофе/Капсульный кофе/Nespresso Original/Gimoka',
-    //           '03385aab-37c6-11ec-0a80-0927001cb0d8' => 'Кофе/Капсульный кофе/Nespresso Original/Illy',
-    //           '5976eb3b-624f-11ec-0a80-02aa000f72aa' => 'Кофе/Капсульный кофе/Nespresso Original/Jacobs',
-    //           'dbf5c425-37c5-11ec-0a80-04f1001d8f15' => 'Кофе/Капсульный кофе/Nespresso Original/Kimbo',
-    //           'f056c349-37c5-11ec-0a80-04f1001d9202' => 'Кофе/Капсульный кофе/Nespresso Original/Lavazza',
-    //           '38f6b9f9-1a47-11ed-0a80-0dc0001122d6' => 'Кофе/Капсульный кофе/Nespresso Original/Lollo',
-    //           'bc6ab979-5fed-11ec-0a80-04f400342b74' => 'Кофе/Капсульный кофе/Nespresso Original/L’OR',
-    //           'b96b7998-7db9-11ec-0a80-02d0000820cd' => 'Кофе/Капсульный кофе/Nespresso Original/Movenpick',
-    //           '064b675d-a76e-11ec-0a80-01c40018583a' => 'Кофе/Капсульный кофе/Nespresso Original/Nespresso',
-    //           '6fcdd383-f584-11ee-0a80-139c00528e07' => 'Кофе/Капсульный кофе/Nespresso Original/RoccaCoffee',
-    //           '46561774-253b-11ed-0a80-0b90000eb5aa' => 'Кофе/Капсульный кофе/Nespresso Original/Starbucks',
-    //           '54dcfb45-1a47-11ed-0a80-0dc000112701' => 'Кофе/Капсульный кофе/Nespresso Original/Vergnano',
-    //           '39d2041d-c24b-11ed-0a80-031200068c1e' => 'Кофе/Капсульный кофе/Lavazza Blue',
-    //           'a6c6e296-0def-11eb-0a80-006b00052201' => 'Кофе/Капсульный кофе/Nespresso Professional',
-    //           'fd858a8a-a76e-11ec-0a80-04e300186c39' => 'Кофе/Капсульный кофе/Nespresso Professional/Nespresso',
-    //           '1e154849-a76f-11ec-0a80-0dca001d5b71' => 'Кофе/Капсульный кофе/Nespresso Professional/Gimoka',
-    //           '14e0f867-ee9c-11ea-0a80-032700087aa2' => 'Кофе/Капсульный кофе/Nespresso Vertuo',
-    //           'b89e0144-4670-11ee-0a80-08d60012a079' => 'Кофе/Молотый Кофе/Borbone',
-    //           '04934eaa-d559-11ee-0a80-0cba0060a46d' => 'Кофе/Молотый Кофе/Bushido',
-    //           'e41df00a-d351-11ee-0a80-00ad002f8ce6' => 'Кофе/Молотый Кофе/Carte Noire',
-    //           'e7f456ad-d558-11ee-0a80-012900605b51' => 'Кофе/Молотый Кофе/Egoiste',
-    //           'e25fa894-1a47-11ed-0a80-0b950010423f' => 'Кофе/Молотый Кофе/Gimoka',
-    //           '965a69b2-4189-11ee-0a80-0349000748e6' => 'Кофе/Молотый Кофе/Illy',
-    //           'b2483c76-d352-11ee-0a80-0129002f7ca6' => 'Кофе/Молотый Кофе/Kimbo',
-    //           'cdd7cf16-1a47-11ed-0a80-05c00010375b' => 'Кофе/Молотый Кофе/Lollo',
-    //           '398e5998-d559-11ee-0a80-06b8005f6e61' => 'Кофе/Молотый Кофе/Movenpick',
-    //           '1ef15c9e-1a48-11ed-0a80-035100126caf' => 'Кофе/Молотый Кофе/Vergnano',
-    //           '19383517-d559-11ee-0a80-02ac005e8ac9' => 'Растворимый кофе/Bushido',
-    //           'd07f7dc7-d558-11ee-0a80-0d9e006021b8' => 'Растворимый кофе/Egoiste',
-    //           '48f076c3-d559-11ee-0a80-06b8005f71de' => 'Растворимый кофе/Movenpick',
-    //           'bf5e2aa6-4670-11ee-0a80-01cf0012df28' => 'Кофе/Чалды/Borbone',
-    //           'e5347b48-1974-11ee-0a80-11d0002ebb92' => 'Кофе/Чалды/Gimoka',
-    //           '30311436-005d-11ee-0a80-141f00086605' => 'Кофе/Чалды/Illy',
-    //           '5b4cdd9c-1971-11ee-0a80-0fdd002cf44d' => 'Кофе/Чалды/Kimbo',
-    //           '24da54e9-005d-11ee-0a80-07ad0008f95e' => 'Кофе/Чалды/LolloCaffe',
-    //           'c80e567e-4fa8-11ee-0a80-119b00211170' => 'Кофе/Чалды/Vergnano',
-    //           'ef5d9842-253a-11ed-0a80-0f43000e9ad8' => 'Кофемашины/Автоматические кофемашины',
-    //           '2612e6e2-ee9c-11ea-0a80-013c0008aa48' => 'Кофемашины/Капсульные кофемашины/Nespresso Original',
-    //           '0753ee79-6b90-11ec-0a80-05b700c50ffc' => 'Кофемашины/Капсульные кофемашины/Dolce Gusto',
-    //           '68b50e11-f200-11ec-0a80-0e710006bfdc' => 'Кофемашины/Капсульные кофемашины/Nespresso Original/Кофемашины',
-    //           '3c232293-ee9c-11ea-0a80-005d0008fd52' => 'Кофемашины/Капсульные кофемашины/Nespresso Vertuo',
-    //           'ad61c795-0eec-11eb-0a80-04c3001d450f' => 'Кофемашины/Капсульные кофемашины/Nespresso Professional',
-    //           'e4be079e-253a-11ed-0a80-068d000e93cb' => 'Кофемашины/Рожковые кофемашины',
-    //           'e1841686-f79a-11ec-0a80-07ef000b788d' => 'Кофемашины/Капсульные кофемашины/Nespresso Vertuo/Кофемашины',
-    //           'e50de198-2fba-11ee-0a80-0079003b54a7' => 'Чай/Чалды/Borbone',
-    //           '786f478c-2533-11ed-0a80-0b90000d4a57' => 'Чай/Dolce Gusto/Foodness',
-    //           'c17a6300-2533-11ed-0a80-0767000d993b' => 'Чай/Dolce Gusto/Lollo',
-    //           'bbdeeabd-2516-11ed-0a80-0b9000078efa' => 'Чай/Nespresso Original/Lollo',
-    //           'dd6a0748-243f-11ed-0a80-0d5600170f54' => 'Чай/Dolce Gusto',
-    //           'cbb2ae63-4670-11ee-0a80-01cf0012e242' => 'Чай/Dolce Gusto/Borbone',
-    //           'd5f6ecc7-4670-11ee-0a80-006100135505' => 'Чай/Nespresso Original/Borbone',
-    //           '21024149-334d-11ed-0a80-0471000ca3b4' => 'Чай/Dolce Gusto/Gimoka',
-    //           '29fbe2e5-3348-11ed-0a80-0471000b51ef' => 'Шоколадные напитки/Dolce Gusto/Gimoka',
-    //           'e769050a-2534-11ed-0a80-02a7000d77b2' => 'Шоколадные напитки/Dolce Gusto/Lollo',
-    //           'ddb4dcf8-4670-11ee-0a80-08d60012a6e3' => 'Шоколадные напитки/Dolce Gusto/Borbone',
-    //           '22bc9f01-2518-11ed-0a80-04d1000779aa' => 'Шоколадные напитки/Nespresso Original/Lollo',
-    //           '61dfdd46-2620-11ed-0a80-0d5c001d0920' => 'Шоколадные напитки/Dolce Gusto/Nescafe',
-    //           'e83390fd-4670-11ee-0a80-0dbe001362a6' => 'Шоколадные напитки/Nespresso Original/Borbone',
-    //         ];
+      $response   = array();
 
-    return $cats;
-  }
-
-  public function getHrefData($href)
-  {
-    $accessdata = self::getMSLoginPassword();
-
-    $curl = curl_init();
-    curl_setopt_array($curl, array(
-      CURLOPT_URL => $href,
-      CURLOPT_RETURNTRANSFER => true,
-      CURLOPT_ENCODING => '',
-      CURLOPT_MAXREDIRS => 10,
-      CURLOPT_TIMEOUT => 0,
-      CURLOPT_FOLLOWLOCATION => true,
-      CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-      CURLOPT_CUSTOMREQUEST => 'GET',
-      CURLOPT_HTTPHEADER => array(
-        'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
-        // 'Authorization: Bearer ' . $token,
-        'Accept-Encoding: gzip',
-        'Connection: Keep-Alive'
-      )
-    ));
-    $content = curl_exec($curl);
-    $httpcode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-
-    if(!empty(json_decode($content))){
-      return json_decode($content);
-    }
-
-    return false;
-  }
-
-  public function getProductAttribute($attributes,$attrId)
-  {
-    foreach ($attributes as $attribute) {
-      if($attribute->id == $attrId){
-        return $attribute;
-      }
-    }
-
-    return false;
-  }
-
-  public function getTurnoverByPeriod($from,$to,$categories)
-  {
-    $accessdata = self::getMSLoginPassword();
-
-    $response   = array();
-    $c = 1;
-
-    $stores = [];
-    $stores[] = 'https://api.moysklad.ru/api/remap/1.2/entity/store/023870f6-ee91-11ea-0a80-05f20007444d';
-    $stores[] = 'https://api.moysklad.ru/api/remap/1.2/entity/store/805d5404-3797-11eb-0a80-01b1001ba27a';
-    $stores[] = 'https://api.moysklad.ru/api/remap/1.2/entity/store/55441d2d-f295-11ea-0a80-021200465d60';
-    $stores[] = 'https://api.moysklad.ru/api/remap/1.2/entity/store/7c5174ab-5200-11eb-0a80-03f90021dcc0';
-    $stores[] = 'https://api.moysklad.ru/api/remap/1.2/entity/store/1e1187c1-85e6-11ed-0a80-0dbe006f385b';
-
-    foreach ($stores as $store) {
-      $storeStr = '&filter=store=' . $store;
-      $momentFrom = $from->format('Y-m-d') . '%2000:00:00';
-      $momentTo   = $to->format('Y-m-d') . '%2023:59:59';
-      $offset     = 0;
-      $url        = "https://api.moysklad.ru/api/remap/1.2/report/turnover/all?offset=" . $offset . "&momentFrom=" . $momentFrom . "&momentTo=" . $momentTo . $storeStr;
-
-      getsales:
       $curl = curl_init();
       curl_setopt_array($curl, array(
-        CURLOPT_URL => $url,
+        CURLOPT_URL => 'https://api.moysklad.ru/api/remap/1.2/entity/productfolder',
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_ENCODING => '',
         CURLOPT_MAXREDIRS => 10,
@@ -256,127 +38,204 @@ class Moysklad extends Model
       $content  = json_decode( curl_exec($curl) );
       curl_close($curl);
 
-      $response = array_merge($response,$content->rows);
-      if($content->meta->size == 1000){
-        $offset = $offset+1000;
-        $c++;
-        if ($c % 20 === 0) { sleep(3); }
-        goto getsales;
+      $excluding =  [
+                      '10119948-b295-11ed-0a80-0bd4000cdf58',
+                      '2e850b78-b295-11ed-0a80-08f7000c74e1',
+                      '380bcff6-b295-11ed-0a80-0cc4000c73b3',
+                      '4204ed9b-b295-11ed-0a80-045f000c7c8a',
+                      '434bb54d-f400-11ea-0a80-0002000441b1',
+                      '5e454570-73b5-11ed-0a80-026700286f67',
+                      '830c746b-b295-11ed-0a80-0256000d4135',
+                      'b7194743-98d8-11ee-0a80-0e9e0051e70b',
+                      'b2d2f781-b2ae-11ed-0a80-0eb20016a4d0',
+                      'bd1dc13a-98d8-11ee-0a80-039700524270',
+                      'c6e77f74-abc6-11ee-0a80-138b00495471',
+                      'c742902b-98d8-11ee-0a80-017900506a3f',
+                      'e7386eb7-a0c1-11ee-0a80-0fee0026fa81',
+                      'edc6cb68-abc6-11ee-0a80-100e004c4f76',
+                      'fb7526e0-9ed2-11ee-0a80-051700027af4',
+                      'f9084bdc-f059-11ea-0a80-05f2001b899c',
+                      '5b238a3d-9ed3-11ee-0a80-0e1f0002b4ad',
+                      '6cf62f6b-abc6-11ee-0a80-100e004c4342',
+                      'e11cf86c-9ed2-11ee-0a80-01940002e543',
+                      '6d5eb0c4-9ed2-11ee-0a80-10d50002c2fd',
+                      'd15cd325-9ed2-11ee-0a80-026e00027a51',
+                      '6f1eab0e-ee9c-11ea-0a80-005d0009039b',
+                      'e95e2b2d-b345-11ed-0a80-0eb200248c0c',
+                      '74518a46-b295-11ed-0a80-045f000c89a1',
+                      '942f4207-98d8-11ee-0a80-107d0052548e',
+                      'a79bacc7-98d8-11ee-0a80-146900510e66',
+                      '9fe95edd-98d8-11ee-0a80-139800510e4f',
+                      'aeef9e68-98d8-11ee-0a80-0cca005116e3'
+                    ];
+      $cats = [];
+      foreach ($content->rows as $row) {
+        if(in_array($row->id,$excluding)){ continue; }
+        $cats[$row->id] = (($row->pathName != '') ? $row->pathName . '/' : '') . $row->name;
       }
 
+      asort($cats);
 
+      // $cats = [
+      //           'e0b4cb97-7a81-11ec-0a80-01ce00043cad' => 'Аксессуары/Coffee to Go и Десерты',
+      //           '7fecb3b0-f713-11ea-0a80-04cf002f953e' => 'Аксессуары/Посуда Nespresso',
+      //           '4b224093-ee9c-11ea-0a80-02120008b5a8' => 'Аксессуары',
+      //           '1b7ee889-3b0e-11ec-0a80-064d0035a678' => 'Аксессуары/Держатели Капсул',
+      //           '020a6f71-3b0e-11ec-0a80-036f0005feb3' => 'Аксессуары/Капучинаторы',
+      //           '8ec6deab-253b-11ed-0a80-0d5c000f4f86' => 'Аксессуары/Кофемолки',
+      //           '3a739644-c404-11ed-0a80-0556004249fa' => 'Аксессуары/Посуда Vergnano',
+      //           '3f36f6cf-3b0e-11ec-0a80-013400020941' => 'Аксессуары/Средства для очистки',
+      //           '765f1d59-a76f-11ec-0a80-0ed700178415' => 'Кофе/Зерновой Кофе',
+      //           '9483bf44-4670-11ee-0a80-0dbe001357df' => 'Кофе/Зерновой Кофе/Borbone',
+      //           'f8d39fb0-d558-11ee-0a80-06b8005f601a' => 'Кофе/Зерновой Кофе/Bushido',
+      //           'a554194d-223f-11ef-0a80-16f8000506d7' => 'Кофе/Зерновой Кофе/Caffe Moreno',
+      //           'ffcd7565-d351-11ee-0a80-0129002f7ab4' => 'Кофе/Зерновой Кофе/Carte Noire',
+      //           'db3de755-d558-11ee-0a80-0567005ff7b5' => 'Кофе/Зерновой Кофе/Egoiste',
+      //           'ed20f1be-1a47-11ed-0a80-0c740011706a' => 'Кофе/Зерновой Кофе/Gimoka',
+      //           'f50e40e8-4188-11ee-0a80-005d00068b5e' => 'Кофе/Зерновой Кофе/Illy',
+      //           '9da1584e-d352-11ee-0a80-06b8002ea4ac' => 'Кофе/Зерновой Кофе/Kimbo',
+      //           'cfd97a20-d6fd-11ee-0a80-15790012ade7' => 'Кофе/Зерновой Кофе/Lavazza',
+      //           'c43a7ba3-1a47-11ed-0a80-0c74001166ef' => 'Кофе/Зерновой Кофе/Lollo',
+      //           '286d8157-d559-11ee-0a80-0cba0060ac12' => 'Кофе/Зерновой Кофе/Movenpick',
+      //           '144bc593-1a48-11ed-0a80-05c000104151' => 'Кофе/Зерновой Кофе/Vergnano',
+      //           'a2164a91-4670-11ee-0a80-07c400139287' => 'Кофе/Капсульный кофе/Dolce Gusto/Borbone',
+      //           'ae60ea3d-1a48-11ed-0a80-035100127f68' => 'Кофе/Капсульный кофе/Dolce Gusto/Foodness',
+      //           '37cc9b6e-a76f-11ec-0a80-068d001d6dbb' => 'Кофе/Капсульный кофе/Dolce Gusto/Gimoka',
+      //           '3ef37783-a76f-11ec-0a80-0ed70017756f' => 'Кофе/Капсульный кофе/Dolce Gusto/Kimbo',
+      //           'c0967c1a-59df-11ee-0a80-02d90019a33a' => 'Кофе/Капсульный кофе/Dolce Gusto/Lavazza',
+      //           '6f46f281-1a47-11ed-0a80-0dc000112a19' => 'Кофе/Капсульный кофе/Dolce Gusto/Lollo',
+      //           'dfe2c307-a76d-11ec-0a80-04e300185548' => 'Кофе/Капсульный кофе/Dolce Gusto/Nescafe',
+      //           '87b8d37c-1a47-11ed-0a80-0b95001036a8' => 'Кофе/Капсульный кофе/Dolce Gusto/Vergnano',
+      //           'c215f4ab-253a-11ed-0a80-0e91000e5649' => 'Кофе/Капсульный кофе/Dolce Gusto/Starbucks',
+      //           'ef7e0001-ee9b-11ea-0a80-005d0008f105' => 'Кофе/Капсульный кофе/Nespresso Original',
+      //           'af62ebb2-4670-11ee-0a80-03500012ca1a' => 'Кофе/Капсульный кофе/Nespresso Original/Borbone',
+      //           '5df2e0bd-a76f-11ec-0a80-0749001844e6' => 'Кофе/Капсульный кофе/Nespresso Original/Gimoka',
+      //           '03385aab-37c6-11ec-0a80-0927001cb0d8' => 'Кофе/Капсульный кофе/Nespresso Original/Illy',
+      //           '5976eb3b-624f-11ec-0a80-02aa000f72aa' => 'Кофе/Капсульный кофе/Nespresso Original/Jacobs',
+      //           'dbf5c425-37c5-11ec-0a80-04f1001d8f15' => 'Кофе/Капсульный кофе/Nespresso Original/Kimbo',
+      //           'f056c349-37c5-11ec-0a80-04f1001d9202' => 'Кофе/Капсульный кофе/Nespresso Original/Lavazza',
+      //           '38f6b9f9-1a47-11ed-0a80-0dc0001122d6' => 'Кофе/Капсульный кофе/Nespresso Original/Lollo',
+      //           'bc6ab979-5fed-11ec-0a80-04f400342b74' => 'Кофе/Капсульный кофе/Nespresso Original/L’OR',
+      //           'b96b7998-7db9-11ec-0a80-02d0000820cd' => 'Кофе/Капсульный кофе/Nespresso Original/Movenpick',
+      //           '064b675d-a76e-11ec-0a80-01c40018583a' => 'Кофе/Капсульный кофе/Nespresso Original/Nespresso',
+      //           '6fcdd383-f584-11ee-0a80-139c00528e07' => 'Кофе/Капсульный кофе/Nespresso Original/RoccaCoffee',
+      //           '46561774-253b-11ed-0a80-0b90000eb5aa' => 'Кофе/Капсульный кофе/Nespresso Original/Starbucks',
+      //           '54dcfb45-1a47-11ed-0a80-0dc000112701' => 'Кофе/Капсульный кофе/Nespresso Original/Vergnano',
+      //           '39d2041d-c24b-11ed-0a80-031200068c1e' => 'Кофе/Капсульный кофе/Lavazza Blue',
+      //           'a6c6e296-0def-11eb-0a80-006b00052201' => 'Кофе/Капсульный кофе/Nespresso Professional',
+      //           'fd858a8a-a76e-11ec-0a80-04e300186c39' => 'Кофе/Капсульный кофе/Nespresso Professional/Nespresso',
+      //           '1e154849-a76f-11ec-0a80-0dca001d5b71' => 'Кофе/Капсульный кофе/Nespresso Professional/Gimoka',
+      //           '14e0f867-ee9c-11ea-0a80-032700087aa2' => 'Кофе/Капсульный кофе/Nespresso Vertuo',
+      //           'b89e0144-4670-11ee-0a80-08d60012a079' => 'Кофе/Молотый Кофе/Borbone',
+      //           '04934eaa-d559-11ee-0a80-0cba0060a46d' => 'Кофе/Молотый Кофе/Bushido',
+      //           'e41df00a-d351-11ee-0a80-00ad002f8ce6' => 'Кофе/Молотый Кофе/Carte Noire',
+      //           'e7f456ad-d558-11ee-0a80-012900605b51' => 'Кофе/Молотый Кофе/Egoiste',
+      //           'e25fa894-1a47-11ed-0a80-0b950010423f' => 'Кофе/Молотый Кофе/Gimoka',
+      //           '965a69b2-4189-11ee-0a80-0349000748e6' => 'Кофе/Молотый Кофе/Illy',
+      //           'b2483c76-d352-11ee-0a80-0129002f7ca6' => 'Кофе/Молотый Кофе/Kimbo',
+      //           'cdd7cf16-1a47-11ed-0a80-05c00010375b' => 'Кофе/Молотый Кофе/Lollo',
+      //           '398e5998-d559-11ee-0a80-06b8005f6e61' => 'Кофе/Молотый Кофе/Movenpick',
+      //           '1ef15c9e-1a48-11ed-0a80-035100126caf' => 'Кофе/Молотый Кофе/Vergnano',
+      //           '19383517-d559-11ee-0a80-02ac005e8ac9' => 'Растворимый кофе/Bushido',
+      //           'd07f7dc7-d558-11ee-0a80-0d9e006021b8' => 'Растворимый кофе/Egoiste',
+      //           '48f076c3-d559-11ee-0a80-06b8005f71de' => 'Растворимый кофе/Movenpick',
+      //           'bf5e2aa6-4670-11ee-0a80-01cf0012df28' => 'Кофе/Чалды/Borbone',
+      //           'e5347b48-1974-11ee-0a80-11d0002ebb92' => 'Кофе/Чалды/Gimoka',
+      //           '30311436-005d-11ee-0a80-141f00086605' => 'Кофе/Чалды/Illy',
+      //           '5b4cdd9c-1971-11ee-0a80-0fdd002cf44d' => 'Кофе/Чалды/Kimbo',
+      //           '24da54e9-005d-11ee-0a80-07ad0008f95e' => 'Кофе/Чалды/LolloCaffe',
+      //           'c80e567e-4fa8-11ee-0a80-119b00211170' => 'Кофе/Чалды/Vergnano',
+      //           'ef5d9842-253a-11ed-0a80-0f43000e9ad8' => 'Кофемашины/Автоматические кофемашины',
+      //           '2612e6e2-ee9c-11ea-0a80-013c0008aa48' => 'Кофемашины/Капсульные кофемашины/Nespresso Original',
+      //           '0753ee79-6b90-11ec-0a80-05b700c50ffc' => 'Кофемашины/Капсульные кофемашины/Dolce Gusto',
+      //           '68b50e11-f200-11ec-0a80-0e710006bfdc' => 'Кофемашины/Капсульные кофемашины/Nespresso Original/Кофемашины',
+      //           '3c232293-ee9c-11ea-0a80-005d0008fd52' => 'Кофемашины/Капсульные кофемашины/Nespresso Vertuo',
+      //           'ad61c795-0eec-11eb-0a80-04c3001d450f' => 'Кофемашины/Капсульные кофемашины/Nespresso Professional',
+      //           'e4be079e-253a-11ed-0a80-068d000e93cb' => 'Кофемашины/Рожковые кофемашины',
+      //           'e1841686-f79a-11ec-0a80-07ef000b788d' => 'Кофемашины/Капсульные кофемашины/Nespresso Vertuo/Кофемашины',
+      //           'e50de198-2fba-11ee-0a80-0079003b54a7' => 'Чай/Чалды/Borbone',
+      //           '786f478c-2533-11ed-0a80-0b90000d4a57' => 'Чай/Dolce Gusto/Foodness',
+      //           'c17a6300-2533-11ed-0a80-0767000d993b' => 'Чай/Dolce Gusto/Lollo',
+      //           'bbdeeabd-2516-11ed-0a80-0b9000078efa' => 'Чай/Nespresso Original/Lollo',
+      //           'dd6a0748-243f-11ed-0a80-0d5600170f54' => 'Чай/Dolce Gusto',
+      //           'cbb2ae63-4670-11ee-0a80-01cf0012e242' => 'Чай/Dolce Gusto/Borbone',
+      //           'd5f6ecc7-4670-11ee-0a80-006100135505' => 'Чай/Nespresso Original/Borbone',
+      //           '21024149-334d-11ed-0a80-0471000ca3b4' => 'Чай/Dolce Gusto/Gimoka',
+      //           '29fbe2e5-3348-11ed-0a80-0471000b51ef' => 'Шоколадные напитки/Dolce Gusto/Gimoka',
+      //           'e769050a-2534-11ed-0a80-02a7000d77b2' => 'Шоколадные напитки/Dolce Gusto/Lollo',
+      //           'ddb4dcf8-4670-11ee-0a80-08d60012a6e3' => 'Шоколадные напитки/Dolce Gusto/Borbone',
+      //           '22bc9f01-2518-11ed-0a80-04d1000779aa' => 'Шоколадные напитки/Nespresso Original/Lollo',
+      //           '61dfdd46-2620-11ed-0a80-0d5c001d0920' => 'Шоколадные напитки/Dolce Gusto/Nescafe',
+      //           'e83390fd-4670-11ee-0a80-0dbe001362a6' => 'Шоколадные напитки/Nespresso Original/Borbone',
+      //         ];
+
+      return $cats;
     }
 
-    return $response;
-  }
+    public function getHrefData($href)
+    {
+      $accessdata = self::getMSLoginPassword();
 
-  public function getMoySkladBuyReportProducts($date,$categories)
-  {
-    $response = [];
-    $catSuffix = '';
+      $curl = curl_init();
+      curl_setopt_array($curl, array(
+        CURLOPT_URL => $href,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_ENCODING => '',
+        CURLOPT_MAXREDIRS => 10,
+        CURLOPT_TIMEOUT => 0,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+        CURLOPT_CUSTOMREQUEST => 'GET',
+        CURLOPT_HTTPHEADER => array(
+          'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
+          // 'Authorization: Bearer ' . $token,
+          'Accept-Encoding: gzip',
+          'Connection: Keep-Alive'
+        )
+      ));
+      $content = curl_exec($curl);
+      $httpcode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
 
-    switch($categories[0]){
-      case 'all':
-        break;
-      default:
-        foreach ($categories as $cat) {
-          $catSuffix .= ";productFolder=https://api.moysklad.ru/api/remap/1.2/entity/productfolder/" . $cat;
+      if(!empty(json_decode($content))){
+        return json_decode($content);
+      }
+
+      return false;
+    }
+
+    public function getProductAttribute($attributes,$attrId)
+    {
+      foreach ($attributes as $attribute) {
+        if($attribute->id == $attrId){
+          return $attribute;
         }
-    }
-
-    $quantityMode = ';quantityMode=all';
-
-    $stores = [];
-    $stores[] = 'https://api.moysklad.ru/api/remap/1.2/entity/store/023870f6-ee91-11ea-0a80-05f20007444d';
-    $stores[] = 'https://api.moysklad.ru/api/remap/1.2/entity/store/805d5404-3797-11eb-0a80-01b1001ba27a';
-    $stores[] = 'https://api.moysklad.ru/api/remap/1.2/entity/store/55441d2d-f295-11ea-0a80-021200465d60';
-    $stores[] = 'https://api.moysklad.ru/api/remap/1.2/entity/store/7c5174ab-5200-11eb-0a80-03f90021dcc0';
-    $stores[] = 'https://api.moysklad.ru/api/remap/1.2/entity/store/1e1187c1-85e6-11ed-0a80-0dbe006f385b';
-
-    $stores = ';store=' . implode(';store=',$stores);
-
-    $accessdata = self::getMSLoginPassword();
-
-    $url = 'https://api.moysklad.ru/api/remap/1.2/report/stock/all?filter=moment=' . $date->format('Y-m-d%20H:i:s') . $catSuffix . $quantityMode . $stores;
-
-    loop:
-    $curl = curl_init();
-    curl_setopt_array($curl, array(
-      CURLOPT_URL => $url,
-      CURLOPT_RETURNTRANSFER => true,
-      CURLOPT_ENCODING => '',
-      CURLOPT_MAXREDIRS => 10,
-      CURLOPT_TIMEOUT => 0,
-      CURLOPT_FOLLOWLOCATION => true,
-      CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-      CURLOPT_CUSTOMREQUEST => 'GET',
-      CURLOPT_HTTPHEADER => array(
-      'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
-      'Accept-Encoding: gzip'
-    ),
-    ));
-    $server_output  = curl_exec ($curl);
-    $httpcode       = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-
-    curl_close ($curl);
-
-    if($server_output){
-      $response = array_merge($response,json_decode($server_output)->rows);
-
-      if(count(json_decode($server_output)->rows) == 1000 AND property_exists(json_decode($server_output)->meta,'nextHref') AND !empty(json_decode($server_output)->meta->nextHref)){
-        $url = json_decode($server_output)->meta->nextHref;
-        goto loop;
       }
-      else {
-        return $response;
-      }
+
+      return false;
     }
 
-    return false;
-  }
+    public function getTurnoverByPeriod($from,$to,$categories)
+    {
+      $accessdata = self::getMSLoginPassword();
 
-  public function getProfitByPeriod($from,$to,$categories,$stores = false)
-  {
-    $accessdata = self::getMSLoginPassword();
+      $response   = array();
+      $c = 1;
 
-    $response     = [];
-    $catSuffixArr = [];
-    $catSuffix    = '';
+      $stores = [];
+      $stores[] = 'https://api.moysklad.ru/api/remap/1.2/entity/store/023870f6-ee91-11ea-0a80-05f20007444d';
+      $stores[] = 'https://api.moysklad.ru/api/remap/1.2/entity/store/805d5404-3797-11eb-0a80-01b1001ba27a';
+      $stores[] = 'https://api.moysklad.ru/api/remap/1.2/entity/store/55441d2d-f295-11ea-0a80-021200465d60';
+      $stores[] = 'https://api.moysklad.ru/api/remap/1.2/entity/store/7c5174ab-5200-11eb-0a80-03f90021dcc0';
+      $stores[] = 'https://api.moysklad.ru/api/remap/1.2/entity/store/1e1187c1-85e6-11ed-0a80-0dbe006f385b';
 
-    switch($categories[0]){
-      case 'all':
-        break;
-      default:
-        foreach ($categories as $cat) {
-          $catSuffixArr[] = "productFolder=https://api.moysklad.ru/api/remap/1.2/entity/productfolder/" . $cat;
-        }
-
-        $catSuffix = '&filter=' . implode(';',$catSuffixArr);
-    }
-
-    $storesArr = [];
-    if($stores){
-      switch($stores){
-        case 'almaty':
-          $storesArr[] = 'https://api.moysklad.ru/api/remap/1.2/entity/store/023870f6-ee91-11ea-0a80-05f20007444d';
-          $storesArr[] = 'https://api.moysklad.ru/api/remap/1.2/entity/store/1e1187c1-85e6-11ed-0a80-0dbe006f385b';
-          break;
-        case 'astana':
-          $storesArr[] = 'https://api.moysklad.ru/api/remap/1.2/entity/store/805d5404-3797-11eb-0a80-01b1001ba27a';
-          break;
-      }
-    }
-
-    $momentFrom = $from->format('Y-m-d') . '%2000:00:00';
-    $momentTo   = $to->format('Y-m-d') . '%2023:59:59';
-    $offset     = 0;
-
-    if(!empty($storesArr)){
-      foreach ($storesArr as $store) {
+      foreach ($stores as $store) {
         $storeStr = '&filter=store=' . $store;
-        $url = "https://api.moysklad.ru/api/remap/1.2/report/profit/byproduct?offset=" . $offset . "&momentFrom=" . $momentFrom . "&momentTo=" . $momentTo . $catSuffix . $storeStr;
+        $momentFrom = $from->format('Y-m-d') . '%2000:00:00';
+        $momentTo   = $to->format('Y-m-d') . '%2023:59:59';
+        $offset     = 0;
+        $url        = "https://api.moysklad.ru/api/remap/1.2/report/turnover/all?offset=" . $offset . "&momentFrom=" . $momentFrom . "&momentTo=" . $momentTo . $storeStr;
 
-        getsalesStores:
+        getsales:
         $curl = curl_init();
         curl_setopt_array($curl, array(
           CURLOPT_URL => $url,
@@ -400,19 +259,240 @@ class Moysklad extends Model
         $response = array_merge($response,$content->rows);
         if($content->meta->size == 1000){
           $offset = $offset+1000;
-          goto getsalesStores;
+          $c++;
+          if ($c % 20 === 0) { sleep(3); }
+          goto getsales;
         }
+
+
       }
 
       return $response;
     }
-    else {
-      $url = "https://api.moysklad.ru/api/remap/1.2/report/profit/byproduct?offset=" . $offset . "&momentFrom=" . $momentFrom . "&momentTo=" . $momentTo . $catSuffix;
 
-      getsales:
+    public function getMoySkladBuyReportProducts($date,$categories)
+    {
+      $response = [];
+      $catSuffix = '';
+
+      switch($categories[0]){
+        case 'all':
+          break;
+        default:
+          foreach ($categories as $cat) {
+            $catSuffix .= ";productFolder=https://api.moysklad.ru/api/remap/1.2/entity/productfolder/" . $cat;
+          }
+      }
+
+      $quantityMode = ';quantityMode=all';
+
+      $stores = [];
+      $stores[] = 'https://api.moysklad.ru/api/remap/1.2/entity/store/023870f6-ee91-11ea-0a80-05f20007444d';
+      $stores[] = 'https://api.moysklad.ru/api/remap/1.2/entity/store/805d5404-3797-11eb-0a80-01b1001ba27a';
+      $stores[] = 'https://api.moysklad.ru/api/remap/1.2/entity/store/55441d2d-f295-11ea-0a80-021200465d60';
+      $stores[] = 'https://api.moysklad.ru/api/remap/1.2/entity/store/7c5174ab-5200-11eb-0a80-03f90021dcc0';
+      $stores[] = 'https://api.moysklad.ru/api/remap/1.2/entity/store/1e1187c1-85e6-11ed-0a80-0dbe006f385b';
+
+      $stores = ';store=' . implode(';store=',$stores);
+
+      $accessdata = self::getMSLoginPassword();
+
+      $url = 'https://api.moysklad.ru/api/remap/1.2/report/stock/all?filter=moment=' . $date->format('Y-m-d%20H:i:s') . $catSuffix . $quantityMode . $stores;
+
+      loop:
       $curl = curl_init();
       curl_setopt_array($curl, array(
         CURLOPT_URL => $url,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_ENCODING => '',
+        CURLOPT_MAXREDIRS => 10,
+        CURLOPT_TIMEOUT => 0,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+        CURLOPT_CUSTOMREQUEST => 'GET',
+        CURLOPT_HTTPHEADER => array(
+        'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
+        'Accept-Encoding: gzip'
+      ),
+      ));
+      $server_output  = curl_exec ($curl);
+      $httpcode       = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+
+      curl_close ($curl);
+
+      if($server_output){
+        $response = array_merge($response,json_decode($server_output)->rows);
+
+        if(count(json_decode($server_output)->rows) == 1000 AND property_exists(json_decode($server_output)->meta,'nextHref') AND !empty(json_decode($server_output)->meta->nextHref)){
+          $url = json_decode($server_output)->meta->nextHref;
+          goto loop;
+        }
+        else {
+          return $response;
+        }
+      }
+
+      return false;
+    }
+
+    public function getProfitByPeriod($from,$to,$categories,$stores = false)
+    {
+      $accessdata = self::getMSLoginPassword();
+
+      $response     = [];
+      $catSuffixArr = [];
+      $catSuffix    = '';
+
+      switch($categories[0]){
+        case 'all':
+          break;
+        default:
+          foreach ($categories as $cat) {
+            $catSuffixArr[] = "productFolder=https://api.moysklad.ru/api/remap/1.2/entity/productfolder/" . $cat;
+          }
+
+          $catSuffix = '&filter=' . implode(';',$catSuffixArr);
+      }
+
+      $storesArr = [];
+      if($stores){
+        switch($stores){
+          case 'almaty':
+            $storesArr[] = 'https://api.moysklad.ru/api/remap/1.2/entity/store/023870f6-ee91-11ea-0a80-05f20007444d';
+            $storesArr[] = 'https://api.moysklad.ru/api/remap/1.2/entity/store/1e1187c1-85e6-11ed-0a80-0dbe006f385b';
+            break;
+          case 'astana':
+            $storesArr[] = 'https://api.moysklad.ru/api/remap/1.2/entity/store/805d5404-3797-11eb-0a80-01b1001ba27a';
+            break;
+        }
+      }
+
+      $momentFrom = $from->format('Y-m-d') . '%2000:00:00';
+      $momentTo   = $to->format('Y-m-d') . '%2023:59:59';
+      $offset     = 0;
+
+      if(!empty($storesArr)){
+        foreach ($storesArr as $store) {
+          $storeStr = '&filter=store=' . $store;
+          $url = "https://api.moysklad.ru/api/remap/1.2/report/profit/byproduct?offset=" . $offset . "&momentFrom=" . $momentFrom . "&momentTo=" . $momentTo . $catSuffix . $storeStr;
+
+          getsalesStores:
+          $curl = curl_init();
+          curl_setopt_array($curl, array(
+            CURLOPT_URL => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_ENCODING => '',
+            CURLOPT_MAXREDIRS => 10,
+            CURLOPT_TIMEOUT => 0,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_CUSTOMREQUEST => 'GET',
+            CURLOPT_HTTPHEADER => array(
+              'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
+              'Accept-Encoding: gzip',
+              'Connection: Keep-Alive'
+            ),
+          ));
+          $httpcode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+          $content  = json_decode( curl_exec($curl) );
+          curl_close($curl);
+
+          $response = array_merge($response,$content->rows);
+          if($content->meta->size == 1000){
+            $offset = $offset+1000;
+            goto getsalesStores;
+          }
+        }
+
+        return $response;
+      }
+      else {
+        $url = "https://api.moysklad.ru/api/remap/1.2/report/profit/byproduct?offset=" . $offset . "&momentFrom=" . $momentFrom . "&momentTo=" . $momentTo . $catSuffix;
+
+        getsales:
+        $curl = curl_init();
+        curl_setopt_array($curl, array(
+          CURLOPT_URL => $url,
+          CURLOPT_RETURNTRANSFER => true,
+          CURLOPT_ENCODING => '',
+          CURLOPT_MAXREDIRS => 10,
+          CURLOPT_TIMEOUT => 0,
+          CURLOPT_FOLLOWLOCATION => true,
+          CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+          CURLOPT_CUSTOMREQUEST => 'GET',
+          CURLOPT_HTTPHEADER => array(
+            'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
+            'Accept-Encoding: gzip',
+            'Connection: Keep-Alive'
+          ),
+        ));
+        $httpcode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+        $content  = json_decode( curl_exec($curl) );
+        curl_close($curl);
+
+        $response = array_merge($response,$content->rows);
+        if($content->meta->size == 1000){
+          $offset = $offset+1000;
+          goto getsales;
+        }
+
+        return $response;
+      }
+    }
+
+    public function getPeriodsProfitsWeeks($weeks)
+    {
+      $accessdata = self::getMSLoginPassword();
+
+      foreach ($weeks as $week) {
+        $week->profitsList = [];
+
+        loop:
+        $url = 'https://api.moysklad.ru/api/remap/1.2/report/profit/byproduct?momentFrom=' . $week->periodFrom . '&momentTo=' . $week->periodTo;
+        $curl = curl_init();
+        curl_setopt_array($curl, array(
+          CURLOPT_URL => $url,
+          CURLOPT_RETURNTRANSFER => true,
+          CURLOPT_ENCODING => '',
+          CURLOPT_MAXREDIRS => 10,
+          CURLOPT_TIMEOUT => 0,
+          CURLOPT_FOLLOWLOCATION => true,
+          CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+          CURLOPT_CUSTOMREQUEST => 'GET',
+          CURLOPT_HTTPHEADER => array(
+            'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
+            'Accept-Encoding: gzip',
+            'Connection: Keep-Alive'
+          )
+        ));
+
+        $httpcode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+        $content  = curl_exec($curl);
+
+        if(!empty(json_decode($content))){
+          $week->profitsList = array_merge($week->profitsList,json_decode($content)->rows);
+
+          if(count(json_decode($content)->rows) == 1000 AND property_exists(json_decode($content)->meta,'nextHref') AND !empty(json_decode($content)->meta->nextHref)){
+            $url = json_decode($content)->meta->nextHref;
+            goto loop;
+          }
+          else {
+            continue;
+          }
+        }
+      }
+
+      return $weeks;
+    }
+
+    public function getReference($refId)
+    {
+      $accessdata = self::getMSLoginPassword();
+
+      $curl = curl_init();
+
+      curl_setopt_array($curl, array(
+        CURLOPT_URL => 'https://api.moysklad.ru/api/remap/1.2/entity/customentity/' . $refId,
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_ENCODING => '',
         CURLOPT_MAXREDIRS => 10,
@@ -426,29 +506,278 @@ class Moysklad extends Model
           'Connection: Keep-Alive'
         ),
       ));
-      $httpcode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-      $content  = json_decode( curl_exec($curl) );
+
+      $response = curl_exec($curl);
       curl_close($curl);
 
-      $response = array_merge($response,$content->rows);
-      if($content->meta->size == 1000){
-        $offset = $offset+1000;
-        goto getsales;
+      if($response){
+        return json_decode($response);
       }
 
-      return $response;
+      return false;
+    }
+
+    public function getStates($meta)
+    {
+      $accessdata = self::getMSLoginPassword();
+
+      $curl = curl_init();
+
+      curl_setopt_array($curl, array(
+        CURLOPT_URL => 'https://api.moysklad.ru/api/remap/1.2/entity/' . $meta . '/metadata',
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_ENCODING => '',
+        CURLOPT_MAXREDIRS => 10,
+        CURLOPT_TIMEOUT => 0,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+        CURLOPT_CUSTOMREQUEST => 'GET',
+        CURLOPT_HTTPHEADER => array(
+          'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
+          'Accept-Encoding: gzip',
+          'Connection: Keep-Alive'
+        ),
+      ));
+
+      $response = curl_exec($curl);
+      curl_close($curl);
+
+      if($response){
+        return json_decode($response);
+      }
+
+      return false;
+    }
+
+    public function buildStateMeta(string $entity, string $stateId): array
+    {
+        return [
+            'href'      => "https://api.moysklad.ru/api/remap/1.2/entity/{$entity}/metadata/states/{$stateId}",
+            'type'      => 'state',
+            'mediaType' => 'application/json',
+        ];
+    }
+
+    private function buildAttributeMeta(string $entity, string $attrId): array
+    {
+        return [
+            'href'      => "https://api.moysklad.ru/api/remap/1.2/entity/{$entity}/metadata/attributes/{$attrId}",
+            'type'      => 'attributemetadata',
+            'mediaType' => 'application/json',
+        ];
+    }
+
+    public function getOrganizations()
+    {
+      $accessdata = self::getMSLoginPassword();
+
+      $curl = curl_init();
+
+      curl_setopt_array($curl, array(
+        CURLOPT_URL => 'https://api.moysklad.ru/api/remap/1.2/entity/organization/',
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_ENCODING => '',
+        CURLOPT_MAXREDIRS => 10,
+        CURLOPT_TIMEOUT => 0,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+        CURLOPT_CUSTOMREQUEST => 'GET',
+        CURLOPT_HTTPHEADER => array(
+          'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
+          'Accept-Encoding: gzip',
+          'Connection: Keep-Alive'
+        ),
+      ));
+
+      $response = curl_exec($curl);
+      curl_close($curl);
+
+      if($response){
+        return json_decode($response);
+      }
+
+      return false;
+    }
+
+    public function getOrganizationAccounts($org)
+    {
+      $accessdata = self::getMSLoginPassword();
+
+      $curl = curl_init();
+
+      curl_setopt_array($curl, array(
+        CURLOPT_URL => 'https://api.moysklad.ru/api/remap/1.2/entity/organization/' . $org . '/accounts/',
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_ENCODING => '',
+        CURLOPT_MAXREDIRS => 10,
+        CURLOPT_TIMEOUT => 0,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+        CURLOPT_CUSTOMREQUEST => 'GET',
+        CURLOPT_HTTPHEADER => array(
+          'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
+          'Accept-Encoding: gzip',
+          'Connection: Keep-Alive'
+        ),
+      ));
+
+      $response = curl_exec($curl);
+      curl_close($curl);
+
+      if($response){
+        return json_decode($response);
+      }
+
+      return false;
+    }
+
+    public function getActualProjects()
+    {
+      return [
+        // 'Kaspi - Времянка' => '698bbf4d-7346-11eb-0a80-083400146e88',
+        // 'Kasta - Времянка' => '7b12e831-0817-11f0-0a80-165a0010ce66',
+        // 'ItalFood - Времянка' => 'd4986e14-0931-11ef-0a80-0bd6000d967f',
+
+        '🟢 Halyk Market' => '842c5548-c90c-11f0-0a80-1aee002c13e9',
+        '🔴 Kaspi Accio' => '5f351348-d269-11f0-0a80-15120016d622',
+        '🔴 Tutto Capsule Kaspi' => '431a8172-d26a-11f0-0a80-0f110016cabd',
+        '🔴 Ital Trade' => '98777142-d26a-11f0-0a80-1be40016550a',
+        '🔵 Wolt' => 'a463b9da-d26c-11f0-0a80-1a6b0016a57a',
+        '🟣 Forte Market' => 'a4481c66-d274-11f0-0a80-0f110017905c',
+        // '📍 Accio' => '341ee0eb-d269-11f0-0a80-0cf20015f0d3',
+        '💎 Юридическое лицо' => '6b625db1-d270-11f0-0a80-1512001756b3',
+        '🔥 Store' => '8fe86883-d275-11f0-0a80-15120017c4b6',
+        '♥️ Accio Store' => 'c4bd7d52-d276-11f0-0a80-17910017cc0c'
+      ];
+    }
+
+  public function getProjectByCode($code)
+  {
+    switch($code){
+      case 'accio':
+        return '698bbf4d-7346-11eb-0a80-083400146e88';
+        break;
+      case 'ItalFood':
+        return '';
+        break;
+      case 'kasta':
+        return '';
+        break;
     }
   }
 
-  public function getPeriodsProfitsWeeks($weeks)
-  {
-    $accessdata = self::getMSLoginPassword();
+    public function getProjects($arr = false)
+    {
+      $accessdata = self::getMSLoginPassword();
 
-    foreach ($weeks as $week) {
-      $week->profitsList = [];
+      $filterStr = '';
+      if($arr && !empty($arr)){
+        $filter = array();
+        foreach ($arr as $a) {
+          $filter[] = 'filter=id=' . $a;
+        }
+
+        $filterStr = '?' . implode('&',$filter);
+      }
+
+      $curl = curl_init();
+
+      curl_setopt_array($curl, array(
+        CURLOPT_URL => 'https://api.moysklad.ru/api/remap/1.2/entity/project/' . $filterStr,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_ENCODING => '',
+        CURLOPT_MAXREDIRS => 10,
+        CURLOPT_TIMEOUT => 0,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+        CURLOPT_CUSTOMREQUEST => 'GET',
+        CURLOPT_HTTPHEADER => array(
+          'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
+          'Accept-Encoding: gzip',
+          'Connection: Keep-Alive'
+        ),
+      ));
+
+      $response = curl_exec($curl);
+      curl_close($curl);
+
+      if($response){
+        return json_decode($response);
+      }
+
+      return false;
+    }
+
+    public function getProductsRemains()
+    {
+      $accessdata = self::getMSLoginPassword();
+
+      $url = "https://api.moysklad.ru/api/remap/1.2/report/stock/bystore/current?stockType=stock";
+      $ch = curl_init();
+      curl_setopt($ch, CURLOPT_URL,$url);
+      curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+                                            'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
+                                            'Connection: Keep-Alive',
+                                            'Accept-Encoding: gzip'
+                                            ));
+      curl_setopt($ch, CURLOPT_HEADER, false);
+      curl_setopt($ch, CURLOPT_ENCODING,'');
+      curl_setopt($ch, CURLOPT_MAXREDIRS,10);
+      curl_setopt($ch, CURLOPT_TIMEOUT,0);
+      curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+      curl_setopt($ch, CURLOPT_FRESH_CONNECT, TRUE);
+      curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+      $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+      $content = curl_exec($ch);
+
+      if(!empty(json_decode($content))){
+        return $content;
+      }
+
+      return false;
+    }
+
+    public function getMoySkladCities()
+    {
+      $accessdata = self::getMSLoginPassword();
+
+      $url = "https://api.moysklad.ru/api/remap/1.2/entity/customentity/08491328-345c-11eb-0a80-03ad0002ec7a";
+      $ch = curl_init();
+      curl_setopt($ch, CURLOPT_URL,$url);
+      curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+                                            'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
+                                            'Connection: Keep-Alive',
+                                            'Accept-Encoding: gzip'
+                                            ));
+      curl_setopt($ch, CURLOPT_HEADER, false);
+      curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+      curl_setopt($ch, CURLOPT_ENCODING, '');
+      curl_setopt($ch, CURLOPT_MAXREDIRS, 10);
+      curl_setopt($ch, CURLOPT_TIMEOUT, 0);
+      curl_setopt($ch, CURLOPT_FRESH_CONNECT, TRUE);
+      curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+      $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+      $content = curl_exec($ch);
+
+      if(!empty(json_decode($content))){
+        return json_decode($content);
+      }
+
+      return false;
+    }
+
+    public function getReceivedComissionerReport()
+    {
+      $accessdata = self::getMSLoginPassword();
+
+      $response = [];
+      $limit = 100;
+
+      $url = "https://api.moysklad.ru/api/remap/1.2/entity/commissionreportin";
+
+      // $url = "https://api.moysklad.ru/api/remap/1.2/entity/demand?filter=state=https://api.moysklad.ru/api/remap/1.2/entity/demand/metadata/states/aa7acdbc-a7c9-11ed-0a80-0c71001732ca&filter=state=https://api.moysklad.ru/api/remap/1.2/entity/demand/metadata/states/732ffbde-0a19-11eb-0a80-055600083d2e&filter=state=https://api.moysklad.ru/api/remap/1.2/entity/demand/metadata/states/24d4a11f-8af4-11eb-0a80-0122002915d0&filter=store=https://api.moysklad.ru/api/remap/1.2/entity/store/023870f6-ee91-11ea-0a80-05f20007444d&filter=store=https://api.moysklad.ru/api/remap/1.2/entity/store/805d5404-3797-11eb-0a80-01b1001ba27a&filter=store=https://api.moysklad.ru/api/remap/1.2/entity/store/1e1187c1-85e6-11ed-0a80-0dbe006f385b&filter=moment%3E=" . $from->format('Y-m-d%20H:i:s') . "&filter=moment%3C=" . $to->format('Y-m-d%20H:i:s') . "&expand=positions.assortment&limit=" . $limit;
 
       loop:
-      $url = 'https://api.moysklad.ru/api/remap/1.2/report/profit/byproduct?momentFrom=' . $week->periodFrom . '&momentTo=' . $week->periodTo;
       $curl = curl_init();
       curl_setopt_array($curl, array(
         CURLOPT_URL => $url,
@@ -470,450 +799,121 @@ class Moysklad extends Model
       $content  = curl_exec($curl);
 
       if(!empty(json_decode($content))){
-        $week->profitsList = array_merge($week->profitsList,json_decode($content)->rows);
+        $response = array_merge($response,json_decode($content)->rows);
 
-        if(count(json_decode($content)->rows) == 1000 AND property_exists(json_decode($content)->meta,'nextHref') AND !empty(json_decode($content)->meta->nextHref)){
+        if(count(json_decode($content)->rows) == 100 AND property_exists(json_decode($content)->meta,'nextHref') AND !empty(json_decode($content)->meta->nextHref)){
           $url = json_decode($content)->meta->nextHref;
           goto loop;
         }
         else {
-          continue;
+          return $response;
         }
       }
+
+      return false;
+
     }
 
-    return $weeks;
-  }
+    public function getPeriodsDemands($from,$to,$conditional = false)
+    {
+      $accessdata = self::getMSLoginPassword();
 
-  public function getReference($refId)
-  {
-    $accessdata = self::getMSLoginPassword();
+      $response = [];
+      $limit = 1000;
+      $l = 1;
 
-    $curl = curl_init();
+      if($conditional){
+        $agentFilters = [];
+        foreach ($conditional->agents as $agent) {
+          if(!isset($agentFilters[$agent->agentId])){
+            $agentFilters[$agent->agentId] = 'https://api.moysklad.ru/api/remap/1.2/entity/counterparty/' . $agent->agentId;
+          }
+        }
 
-    curl_setopt_array($curl, array(
-      CURLOPT_URL => 'https://api.moysklad.ru/api/remap/1.2/entity/customentity/' . $refId,
-      CURLOPT_RETURNTRANSFER => true,
-      CURLOPT_ENCODING => '',
-      CURLOPT_MAXREDIRS => 10,
-      CURLOPT_TIMEOUT => 0,
-      CURLOPT_FOLLOWLOCATION => true,
-      CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-      CURLOPT_CUSTOMREQUEST => 'GET',
-      CURLOPT_HTTPHEADER => array(
-        'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
-        'Accept-Encoding: gzip',
-        'Connection: Keep-Alive'
-      ),
-    ));
+        foreach ($conditional->states as $state) {
+          if(!isset($statesFilters[$state])){
+            $statesFilters[$state] = 'https://api.moysklad.ru/api/remap/1.2/entity/demand/metadata/states/' . $state;
+          }
+        }
 
-    $response = curl_exec($curl);
-    curl_close($curl);
+        $periodData = '';
+        if($conditional->includeperiods){
+          $periodData = '&filter=moment%3E=' . $from->format('Y-m-d%20H:i:s') . '&filter=moment%3C=' . $to->format('Y-m-d%2023:59:59');
+        }
 
-    if($response){
-      return json_decode($response);
-    }
-
-    return false;
-  }
-
-  public function getStates($meta)
-  {
-    $accessdata = self::getMSLoginPassword();
-
-    $curl = curl_init();
-
-    curl_setopt_array($curl, array(
-      CURLOPT_URL => 'https://api.moysklad.ru/api/remap/1.2/entity/' . $meta . '/metadata',
-      CURLOPT_RETURNTRANSFER => true,
-      CURLOPT_ENCODING => '',
-      CURLOPT_MAXREDIRS => 10,
-      CURLOPT_TIMEOUT => 0,
-      CURLOPT_FOLLOWLOCATION => true,
-      CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-      CURLOPT_CUSTOMREQUEST => 'GET',
-      CURLOPT_HTTPHEADER => array(
-        'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
-        'Accept-Encoding: gzip',
-        'Connection: Keep-Alive'
-      ),
-    ));
-
-    $response = curl_exec($curl);
-    curl_close($curl);
-
-    if($response){
-      return json_decode($response);
-    }
-
-    return false;
-  }
-
-  public function buildStateMeta(string $entity, string $stateId): array
-  {
-      return [
-          'href'      => "https://api.moysklad.ru/api/remap/1.2/entity/{$entity}/metadata/states/{$stateId}",
-          'type'      => 'state',
-          'mediaType' => 'application/json',
-      ];
-  }
-
-  private function buildAttributeMeta(string $entity, string $attrId): array
-  {
-      return [
-          'href'      => "https://api.moysklad.ru/api/remap/1.2/entity/{$entity}/metadata/attributes/{$attrId}",
-          'type'      => 'attributemetadata',
-          'mediaType' => 'application/json',
-      ];
-  }
-
-  public function getOrganizations()
-  {
-    $accessdata = self::getMSLoginPassword();
-
-    $curl = curl_init();
-
-    curl_setopt_array($curl, array(
-      CURLOPT_URL => 'https://api.moysklad.ru/api/remap/1.2/entity/organization/',
-      CURLOPT_RETURNTRANSFER => true,
-      CURLOPT_ENCODING => '',
-      CURLOPT_MAXREDIRS => 10,
-      CURLOPT_TIMEOUT => 0,
-      CURLOPT_FOLLOWLOCATION => true,
-      CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-      CURLOPT_CUSTOMREQUEST => 'GET',
-      CURLOPT_HTTPHEADER => array(
-        'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
-        'Accept-Encoding: gzip',
-        'Connection: Keep-Alive'
-      ),
-    ));
-
-    $response = curl_exec($curl);
-    curl_close($curl);
-
-    if($response){
-      return json_decode($response);
-    }
-
-    return false;
-  }
-
-  public function getOrganizationAccounts($org)
-  {
-    $accessdata = self::getMSLoginPassword();
-
-    $curl = curl_init();
-
-    curl_setopt_array($curl, array(
-      CURLOPT_URL => 'https://api.moysklad.ru/api/remap/1.2/entity/organization/' . $org . '/accounts/',
-      CURLOPT_RETURNTRANSFER => true,
-      CURLOPT_ENCODING => '',
-      CURLOPT_MAXREDIRS => 10,
-      CURLOPT_TIMEOUT => 0,
-      CURLOPT_FOLLOWLOCATION => true,
-      CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-      CURLOPT_CUSTOMREQUEST => 'GET',
-      CURLOPT_HTTPHEADER => array(
-        'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
-        'Accept-Encoding: gzip',
-        'Connection: Keep-Alive'
-      ),
-    ));
-
-    $response = curl_exec($curl);
-    curl_close($curl);
-
-    if($response){
-      return json_decode($response);
-    }
-
-    return false;
-  }
-
-  public function getActualProjects()
-  {
-    return [
-      // 'Kaspi - Времянка' => '698bbf4d-7346-11eb-0a80-083400146e88',
-      // 'Kasta - Времянка' => '7b12e831-0817-11f0-0a80-165a0010ce66',
-      // 'ItalFood - Времянка' => 'd4986e14-0931-11ef-0a80-0bd6000d967f',
-
-      '🟢 Halyk Market' => '842c5548-c90c-11f0-0a80-1aee002c13e9',
-      '🔴 Kaspi Accio' => '5f351348-d269-11f0-0a80-15120016d622',
-      '🔴 Tutto Capsule Kaspi' => '431a8172-d26a-11f0-0a80-0f110016cabd',
-      '🔴 Ital Trade' => '98777142-d26a-11f0-0a80-1be40016550a',
-      '🔵 Wolt' => 'a463b9da-d26c-11f0-0a80-1a6b0016a57a',
-      '🟣 Forte Market' => 'a4481c66-d274-11f0-0a80-0f110017905c',
-      // '📍 Accio' => '341ee0eb-d269-11f0-0a80-0cf20015f0d3',
-      '💎 Юридическое лицо' => '6b625db1-d270-11f0-0a80-1512001756b3',
-      '🔥 Store' => '8fe86883-d275-11f0-0a80-15120017c4b6',
-      '♥️ Accio Store' => 'c4bd7d52-d276-11f0-0a80-17910017cc0c'
-    ];
-  }
-
-  public function getProjectByCode($code)
-  {
-    switch($code){
-      case 'accio':
-        return '698bbf4d-7346-11eb-0a80-083400146e88';
-        break;
-      case 'ItalFood':
-        return '';
-        break;
-      case 'kasta':
-        return '';
-        break;
-    }
-  }
-
-  public function getProjects($arr = false)
-  {
-    $accessdata = self::getMSLoginPassword();
-
-    $filterStr = '';
-    if($arr && !empty($arr)){
-      $filter = array();
-      foreach ($arr as $a) {
-        $filter[] = 'filter=id=' . $a;
-      }
-
-      $filterStr = '?' . implode('&',$filter);
-    }
-
-    $curl = curl_init();
-
-    curl_setopt_array($curl, array(
-      CURLOPT_URL => 'https://api.moysklad.ru/api/remap/1.2/entity/project/' . $filterStr,
-      CURLOPT_RETURNTRANSFER => true,
-      CURLOPT_ENCODING => '',
-      CURLOPT_MAXREDIRS => 10,
-      CURLOPT_TIMEOUT => 0,
-      CURLOPT_FOLLOWLOCATION => true,
-      CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-      CURLOPT_CUSTOMREQUEST => 'GET',
-      CURLOPT_HTTPHEADER => array(
-        'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
-        'Accept-Encoding: gzip',
-        'Connection: Keep-Alive'
-      ),
-    ));
-
-    $response = curl_exec($curl);
-    curl_close($curl);
-
-    if($response){
-      return json_decode($response);
-    }
-
-    return false;
-  }
-
-  public function getProductsRemains()
-  {
-    $accessdata = self::getMSLoginPassword();
-
-    $url = "https://api.moysklad.ru/api/remap/1.2/report/stock/bystore/current?stockType=stock";
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL,$url);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, array(
-                                          'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
-                                          'Connection: Keep-Alive',
-                                          'Accept-Encoding: gzip'
-                                          ));
-    curl_setopt($ch, CURLOPT_HEADER, false);
-    curl_setopt($ch, CURLOPT_ENCODING,'');
-    curl_setopt($ch, CURLOPT_MAXREDIRS,10);
-    curl_setopt($ch, CURLOPT_TIMEOUT,0);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_FRESH_CONNECT, TRUE);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $content = curl_exec($ch);
-
-    if(!empty(json_decode($content))){
-      return $content;
-    }
-
-    return false;
-  }
-
-  public function getMoySkladCities()
-  {
-    $accessdata = self::getMSLoginPassword();
-
-    $url = "https://api.moysklad.ru/api/remap/1.2/entity/customentity/08491328-345c-11eb-0a80-03ad0002ec7a";
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL,$url);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, array(
-                                          'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
-                                          'Connection: Keep-Alive',
-                                          'Accept-Encoding: gzip'
-                                          ));
-    curl_setopt($ch, CURLOPT_HEADER, false);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_ENCODING, '');
-    curl_setopt($ch, CURLOPT_MAXREDIRS, 10);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 0);
-    curl_setopt($ch, CURLOPT_FRESH_CONNECT, TRUE);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $content = curl_exec($ch);
-
-    if(!empty(json_decode($content))){
-      return json_decode($content);
-    }
-
-    return false;
-  }
-
-  public function getReceivedComissionerReport()
-  {
-    $accessdata = self::getMSLoginPassword();
-
-    $response = [];
-    $limit = 100;
-
-    $url = "https://api.moysklad.ru/api/remap/1.2/entity/commissionreportin";
-
-    // $url = "https://api.moysklad.ru/api/remap/1.2/entity/demand?filter=state=https://api.moysklad.ru/api/remap/1.2/entity/demand/metadata/states/aa7acdbc-a7c9-11ed-0a80-0c71001732ca&filter=state=https://api.moysklad.ru/api/remap/1.2/entity/demand/metadata/states/732ffbde-0a19-11eb-0a80-055600083d2e&filter=state=https://api.moysklad.ru/api/remap/1.2/entity/demand/metadata/states/24d4a11f-8af4-11eb-0a80-0122002915d0&filter=store=https://api.moysklad.ru/api/remap/1.2/entity/store/023870f6-ee91-11ea-0a80-05f20007444d&filter=store=https://api.moysklad.ru/api/remap/1.2/entity/store/805d5404-3797-11eb-0a80-01b1001ba27a&filter=store=https://api.moysklad.ru/api/remap/1.2/entity/store/1e1187c1-85e6-11ed-0a80-0dbe006f385b&filter=moment%3E=" . $from->format('Y-m-d%20H:i:s') . "&filter=moment%3C=" . $to->format('Y-m-d%20H:i:s') . "&expand=positions.assortment&limit=" . $limit;
-
-    loop:
-    $curl = curl_init();
-    curl_setopt_array($curl, array(
-      CURLOPT_URL => $url,
-      CURLOPT_RETURNTRANSFER => true,
-      CURLOPT_ENCODING => '',
-      CURLOPT_MAXREDIRS => 10,
-      CURLOPT_TIMEOUT => 0,
-      CURLOPT_FOLLOWLOCATION => true,
-      CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-      CURLOPT_CUSTOMREQUEST => 'GET',
-      CURLOPT_HTTPHEADER => array(
-        'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
-        'Accept-Encoding: gzip',
-        'Connection: Keep-Alive'
-      )
-    ));
-
-    $httpcode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-    $content  = curl_exec($curl);
-
-    if(!empty(json_decode($content))){
-      $response = array_merge($response,json_decode($content)->rows);
-
-      if(count(json_decode($content)->rows) == 100 AND property_exists(json_decode($content)->meta,'nextHref') AND !empty(json_decode($content)->meta->nextHref)){
-        $url = json_decode($content)->meta->nextHref;
-        goto loop;
+        $url = "https://api.moysklad.ru/api/remap/1.2/entity/demand?filter=state=" . implode('&filter=state=',$statesFilters) . "&filter=agent=" . implode('&filter=agent=',$agentFilters) . $periodData . "&expand=positions.assortment&limit=" . $limit;
       }
       else {
-        return $response;
+        $url = "https://api.moysklad.ru/api/remap/1.2/entity/demand?filter=state=https://api.moysklad.ru/api/remap/1.2/entity/demand/metadata/states/aa7acdbc-a7c9-11ed-0a80-0c71001732ca&filter=state=https://api.moysklad.ru/api/remap/1.2/entity/demand/metadata/states/732ffbde-0a19-11eb-0a80-055600083d2e&filter=state=https://api.moysklad.ru/api/remap/1.2/entity/demand/metadata/states/24d4a11f-8af4-11eb-0a80-0122002915d0&filter=store=https://api.moysklad.ru/api/remap/1.2/entity/store/023870f6-ee91-11ea-0a80-05f20007444d&filter=store=https://api.moysklad.ru/api/remap/1.2/entity/store/805d5404-3797-11eb-0a80-01b1001ba27a&filter=store=https://api.moysklad.ru/api/remap/1.2/entity/store/1e1187c1-85e6-11ed-0a80-0dbe006f385b&filter=moment%3E=" . $from->format('Y-m-d%20H:i:s') . "&filter=moment%3C=" . $to->format('Y-m-d%20H:i:s') . "&expand=positions.assortment&limit=" . $limit;
       }
-    }
 
-    return false;
+      loop:
+      $curl = curl_init();
+      curl_setopt_array($curl, array(
+        CURLOPT_URL => $url,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_ENCODING => '',
+        CURLOPT_MAXREDIRS => 10,
+        CURLOPT_TIMEOUT => 0,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+        CURLOPT_CUSTOMREQUEST => 'GET',
+        CURLOPT_HTTPHEADER => array(
+          'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
+          'Accept-Encoding: gzip',
+          'Connection: Keep-Alive'
+        )
+      ));
 
-  }
+      $httpcode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+      $content  = curl_exec($curl);
 
-  public function getPeriodsDemands($from,$to,$conditional = false)
-  {
-    $accessdata = self::getMSLoginPassword();
-
-    $response = [];
-    $limit = 1000;
-    $l = 1;
-
-    if($conditional){
-      $agentFilters = [];
-      foreach ($conditional->agents as $agent) {
-        if(!isset($agentFilters[$agent->agentId])){
-          $agentFilters[$agent->agentId] = 'https://api.moysklad.ru/api/remap/1.2/entity/counterparty/' . $agent->agentId;
+      if(!empty(json_decode($content))){
+        $response = array_merge($response,json_decode($content)->rows);
+        if(count(json_decode($content)->rows) == 100 AND property_exists(json_decode($content)->meta,'nextHref') AND !empty(json_decode($content)->meta->nextHref)){
+          $url = json_decode($content)->meta->nextHref;
+          $l++;
+          if ($l % 30 === 0) { sleep(3); }
+          goto loop;
+        }
+        else {
+          return $response;
         }
       }
 
-      foreach ($conditional->states as $state) {
-        if(!isset($statesFilters[$state])){
-          $statesFilters[$state] = 'https://api.moysklad.ru/api/remap/1.2/entity/demand/metadata/states/' . $state;
-        }
-      }
-
-      $periodData = '';
-      if($conditional->includeperiods){
-        $periodData = '&filter=moment%3E=' . $from->format('Y-m-d%20H:i:s') . '&filter=moment%3C=' . $to->format('Y-m-d%2023:59:59');
-      }
-
-      $url = "https://api.moysklad.ru/api/remap/1.2/entity/demand?filter=state=" . implode('&filter=state=',$statesFilters) . "&filter=agent=" . implode('&filter=agent=',$agentFilters) . $periodData . "&expand=positions.assortment&limit=" . $limit;
-    }
-    else {
-      $url = "https://api.moysklad.ru/api/remap/1.2/entity/demand?filter=state=https://api.moysklad.ru/api/remap/1.2/entity/demand/metadata/states/aa7acdbc-a7c9-11ed-0a80-0c71001732ca&filter=state=https://api.moysklad.ru/api/remap/1.2/entity/demand/metadata/states/732ffbde-0a19-11eb-0a80-055600083d2e&filter=state=https://api.moysklad.ru/api/remap/1.2/entity/demand/metadata/states/24d4a11f-8af4-11eb-0a80-0122002915d0&filter=store=https://api.moysklad.ru/api/remap/1.2/entity/store/023870f6-ee91-11ea-0a80-05f20007444d&filter=store=https://api.moysklad.ru/api/remap/1.2/entity/store/805d5404-3797-11eb-0a80-01b1001ba27a&filter=store=https://api.moysklad.ru/api/remap/1.2/entity/store/1e1187c1-85e6-11ed-0a80-0dbe006f385b&filter=moment%3E=" . $from->format('Y-m-d%20H:i:s') . "&filter=moment%3C=" . $to->format('Y-m-d%20H:i:s') . "&expand=positions.assortment&limit=" . $limit;
+      return false;
     }
 
-    loop:
-    $curl = curl_init();
-    curl_setopt_array($curl, array(
-      CURLOPT_URL => $url,
-      CURLOPT_RETURNTRANSFER => true,
-      CURLOPT_ENCODING => '',
-      CURLOPT_MAXREDIRS => 10,
-      CURLOPT_TIMEOUT => 0,
-      CURLOPT_FOLLOWLOCATION => true,
-      CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-      CURLOPT_CUSTOMREQUEST => 'GET',
-      CURLOPT_HTTPHEADER => array(
-        'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
-        'Accept-Encoding: gzip',
-        'Connection: Keep-Alive'
-      )
-    ));
+    private function getPaymentByMarketplaceOrderId($orderId)
+    {
+      $accessdata = self::getMSLoginPassword();
 
-    $httpcode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-    $content  = curl_exec($curl);
+      $curl = curl_init();
+      curl_setopt_array($curl, array(
+        CURLOPT_URL => 'https://api.moysklad.ru/api/remap/1.2/entity/paymentin?filter=https://api.moysklad.ru/api/remap/1.2/entity/paymentin/metadata/attributes/886cd568-ea7f-11ed-0a80-10a80071443d=' . $orderId,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_ENCODING => '',
+        CURLOPT_MAXREDIRS => 10,
+        CURLOPT_TIMEOUT => 0,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+        CURLOPT_CUSTOMREQUEST => 'GET',
+        CURLOPT_HTTPHEADER => array(
+          'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
+          // 'Authorization: Bearer ' . $token,
+          'Accept-Encoding: gzip',
+          'Connection: Keep-Alive'
+        )
+      ));
+      $content = curl_exec($curl);
+      $httpcode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
 
-    if(!empty(json_decode($content))){
-      $response = array_merge($response,json_decode($content)->rows);
-      if(count(json_decode($content)->rows) == 100 AND property_exists(json_decode($content)->meta,'nextHref') AND !empty(json_decode($content)->meta->nextHref)){
-        $url = json_decode($content)->meta->nextHref;
-        $l++;
-        if ($l % 30 === 0) { sleep(3); }
-        goto loop;
+      if(!empty(json_decode($content))){
+        return json_decode($content);
       }
-      else {
-        return $response;
-      }
+
+      return false;
     }
-
-    return false;
-  }
-
-  private function getPaymentByMarketplaceOrderId($orderId)
-  {
-    $accessdata = self::getMSLoginPassword();
-
-    $curl = curl_init();
-    curl_setopt_array($curl, array(
-      CURLOPT_URL => 'https://api.moysklad.ru/api/remap/1.2/entity/paymentin?filter=https://api.moysklad.ru/api/remap/1.2/entity/paymentin/metadata/attributes/886cd568-ea7f-11ed-0a80-10a80071443d=' . $orderId,
-      CURLOPT_RETURNTRANSFER => true,
-      CURLOPT_ENCODING => '',
-      CURLOPT_MAXREDIRS => 10,
-      CURLOPT_TIMEOUT => 0,
-      CURLOPT_FOLLOWLOCATION => true,
-      CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-      CURLOPT_CUSTOMREQUEST => 'GET',
-      CURLOPT_HTTPHEADER => array(
-        'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
-        // 'Authorization: Bearer ' . $token,
-        'Accept-Encoding: gzip',
-        'Connection: Keep-Alive'
-      )
-    ));
-    $content = curl_exec($curl);
-    $httpcode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-
-    if(!empty(json_decode($content))){
-      return json_decode($content);
-    }
-
-    return false;
-  }
 
   private function updatePayment($paymentId,$postPayment,$postDate,$state)
   {
@@ -1774,19 +1774,12 @@ class Moysklad extends Model
       // 2) CREATE demand
       $url = 'https://api.moysklad.ru/api/remap/1.2/entity/demand';
 
-      $stateToDemand = Yii::$app->params['moysklad']['demandUpdateHandler']['stateToDemand'];
-      $payload['state'] = [
-          'meta' => $this->buildStateMeta('demand', $stateToDemand)
-      ];
+      $stateToDemand = (string)($options['state_id'] ?? Yii::$app->params['moysklad']['demandUpdateHandler']['stateToDemand'] ?? '');
 
       if ($stateToDemand !== '') {
-          $payload['state'] = [
-              'meta' => [
-                  'href'      => "https://api.moysklad.ru/api/remap/1.2/entity/demand/metadata/states/{$stateToDemand}",
-                  'type'      => 'state',
-                  'mediaType' => 'application/json',
-              ]
-          ];
+        $payload['state'] = [
+            'meta' => $this->buildStateMeta('demand', $stateToDemand)
+        ];
       }
 
       $ch = curl_init($url);
@@ -2452,8 +2445,10 @@ class Moysklad extends Model
   private function buildInvoiceOutPayloadFromOrder(object $msOrder, $config = null): array
   {
       // Агент и организация обычно обязательны для invoiceout
-      $agentMeta = $msOrder->agent->meta ?? null;
-      $orgMeta   = $msOrder->organization->meta ?? null;
+      $agentMeta  = $msOrder->agent->meta ?? null;
+      $orgMeta    = $msOrder->organization->meta ?? null;
+      $storeMeta  = $msOrder->store->meta ?? null;
+      $projectMeta= $msOrder->project->meta ?? null;
 
       // Позиции invoiceout — можно просто скопировать из заказа
       $rows = [];
@@ -2472,15 +2467,14 @@ class Moysklad extends Model
       }
 
       $payload = [
+          'state'        => ['meta' => self::buildStateMeta('invoiceout',YII::$app->params['moysklad']['invoiceOutStateIssued'])],
+          'store'        => ['meta' => $storeMeta],
+          'project'      => ['meta' => $projectMeta],
           'agent'        => ['meta' => $agentMeta],
           'organization' => ['meta' => $orgMeta],
           'customerOrder'=> ['meta' => $msOrder->meta], // связь со счетом через заказ
           'positions'    => ['rows' => $rows],
       ];
-
-      // Если у тебя в конфиге есть статусы/счёт/какие-то реквизиты для invoiceout — добавь тут
-      // Например, если хочешь проставить "Счет выставлен" как state в invoiceout (если есть отдельные статусы invoiceout):
-      // if (!empty($config->invoiceout_state)) { $payload['state'] = $this->buildStateMeta('invoiceout', $config->invoiceout_state); }
 
       return $payload;
   }
@@ -2594,7 +2588,8 @@ class Moysklad extends Model
       string $orderNum,
       $paymentTypeMeta,
       string $incomeIssueAttrId,
-      string $incomeIssueValueId
+      string $incomeIssueValueId,
+      $stateId = null
   ) {
       $url = "https://api.moysklad.ru/api/remap/1.2/entity/paymentin";
 
@@ -2611,6 +2606,10 @@ class Moysklad extends Model
           'customerOrder'=> ['meta' => $order->meta],
           'applicable'   => false,
       ];
+
+      if($stateId){
+        $payload['state'] = ['meta' => self::buildStateMeta('paymentin',$stateId)];
+      }
 
       $attributes = [];
 
@@ -2685,7 +2684,8 @@ class Moysklad extends Model
       string $orderNum,
       $paymentTypeMeta,
       string $incomeIssueAttrId,
-      string $incomeIssueValueId
+      string $incomeIssueValueId,
+      $stateId = null
   ) {
       $url = "https://api.moysklad.ru/api/remap/1.2/entity/cashin";
 
@@ -2702,6 +2702,10 @@ class Moysklad extends Model
           'customerOrder'=> ['meta' => $order->meta],
           'applicable'   => false,
       ];
+
+      if($stateId){
+        $payload['state'] = ['meta' => self::buildStateMeta('cashin',$stateId)];
+      }
 
       $attributes = [];
 
