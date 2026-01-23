@@ -1,52 +1,59 @@
 <?php
-use Yii;
-
-use app\models\CashRegister;
-use app\models\Kaspi;
-use app\models\Whatsapp;
-use app\models\Moysklad;
-
-
+// use app\models\CashRegister;
+// use app\models\Kaspi;
+// use app\models\Whatsapp;
+// use app\models\Moysklad;
+//
+//
 // ini_set('display_errors', '1');
 // error_reporting(E_ALL);
 //
 // $moysklad = new Moysklad();
 //
-// $orderHref = 'https://api.moysklad.ru/api/remap/1.2/entity/customerorder/42906f91-f2e9-11f0-0a80-1145001f54f6';
+// $orderHref = 'https://api.moysklad.ru/api/remap/1.2/entity/customerorder/110416e9-ee35-11f0-0a80-17c801ead99d';
 //
 // $order = $moysklad->getHrefData(
-//     $orderHref . '?expand=project,state,positions,paymentType,attributes'
+//     $orderHref . '?expand=project,state,positions,paymentType,attributes,finance'
 // );
 //
-// $demand = $order->demands[0];
+// foreach ($order->demands as $demand) {
+//   $demand = $moysklad->getHrefData(
+//     $demand->meta->href . '?expand=project,state,positions,paymentType,attributes,paymentin'
+//   );
+//   if(property_exists($demand,'payments') && !empty($demand->payments)){
+//     $demandReady = $demand;
+//     break;
+//   }
+// }
 //
-// $demand = $moysklad->getHrefData(
-//   $demand->meta->href . '?expand=project,state,positions,paymentType,attributes'
-// );
 //
-// $returns = $demand->returns;
+// $payments = $demandReady->payments;
 //
-// $batchSize   = 30;   // сколько удаляем за 1 batch
-// $maxTotal    = 300;  // общий лимит
+// $batchSize   = 40;   // сколько удаляем за 1 batch
+// $maxTotal    = 1000;  // общий лимит
 // $pause       = 3;    // пауза между batch
 // $payload     = [];
 // $c           = 0;
 //
-// foreach ($returns as $return) {
-//
+// foreach ($payments as $payment) {
 //     if ($c >= $maxTotal) {
 //         break;
 //     }
 //
-//     $href = (string)($return->meta->href ?? '');
+//
+//     $href = (string)($payment->meta->href ?? '');
 //     if ($href === '') {
 //         continue;
+//     }
+//
+//     if($href == 'https://api.moysklad.ru/api/remap/1.2/entity/paymentin/b8ed9762-eef6-11f0-0a80-039902073b4b'){
+//       continue;
 //     }
 //
 //     $payload[] = [
 //         'meta' => [
 //             'href'      => $href,
-//             'type'      => 'salesreturn',
+//             'type'      => 'paymentin',
 //             'mediaType' => 'application/json',
 //         ],
 //     ];
@@ -57,20 +64,9 @@ use app\models\Moysklad;
 //     if (count($payload) === $batchSize) {
 //
 //         $resp = $moysklad->batchDeleteEntity(
-//             'salesreturn/delete',
+//             'paymentin/delete',
 //             $payload
 //         );
-//
-//         // при необходимости — лог
-//         /*
-//         file_put_contents(__DIR__ . '/../logs/ms_service/delete_salesreturn_batch.txt',
-//             date('d.m.Y H:i:s') . PHP_EOL .
-//             "batch size=" . count($payload) . PHP_EOL .
-//             print_r($resp, true) . PHP_EOL .
-//             str_repeat('-', 60) . PHP_EOL,
-//             FILE_APPEND
-//         );
-//         */
 //
 //         $payload = []; // очищаем batch
 //         sleep($pause);
@@ -81,7 +77,7 @@ use app\models\Moysklad;
 //  * если остался хвост (< batchSize)
 //  */
 // if (!empty($payload)) {
-//     $resp = \app\models\Moysklad::batchDeleteEntity(
+//     $resp = $moysklad->batchDeleteEntity(
 //         'salesreturn/delete',
 //         $payload
 //     );

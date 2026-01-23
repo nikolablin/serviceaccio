@@ -73,6 +73,149 @@ return [
       'login'     => 'online@2336623',
       'password'  => 'Gj953928$',
 
+      'products' => [
+        'attributesFields' => [
+          'ntin' => '594f2460-e4af-11f0-0a80-192e0037459c', // Атрибут NTIN продукта
+        ]
+      ],
+
+      'invoicesout' => [
+        'states' => [
+          'invoiceissued' => '8cb3325d-0a72-11ed-0a80-0266001870b2',
+        ]
+      ],
+
+      'moneyin' => [
+        'states' => [
+          'paymentin' => [
+            'invoiceissued'   => '6e980f8b-1a83-11f0-0a80-0dbb000314b7',
+            'waitForIncoming' => '529980fb-346a-11eb-0a80-04cd00042953',
+            'cancelled' => '529982b4-346a-11eb-0a80-04cd00042955',
+          ],
+          'cashin' => [
+            'waitForIncoming' => 'fc9b310f-2738-11eb-0a80-0902001c1e9c',
+            'cancelled' => '735c68bc-f6ce-11eb-0a80-0153001141cf',
+          ],
+        ],
+
+        'attributesFields' => [
+          'paymentin' => [
+            'manager'       => '2ec56836-aa20-11ed-0a80-09620021e953',
+            'incomeStream'  => '9401deb0-0bc0-11ec-0a80-021c0019cf2b',
+            'paymentType'   => 'f36cd71a-ace5-11ed-0a80-06ac001a56c2',
+            'orderNumber'   => '886cd568-ea7f-11ed-0a80-10a80071443d',
+          ],
+          'cashin' => [
+            'manager'       => '442918d8-aa20-11ed-0a80-0fba00223f9c',
+            'incomeStream'  => '8184c165-0bc0-11ec-0a80-0817001a8435',
+            'paymentType'   => '7e92f4ab-ace6-11ed-0a80-0570001a3e98',
+            'orderNumber'   => false,
+          ]
+        ],
+
+        'attributesFieldsDictionaries' => [
+          'incomeStream'  => '1762788a-0bc0-11ec-0a80-00750019f2ed',
+          'paymentType'   => 'd8662995-836c-11ed-0a80-04de0034157c'
+        ],
+
+        'attributesFieldsValues' => [
+          'roznSales'   => '392e4b46-0bc0-11ec-0a80-057d0019c290',    // Значение Продажи розничные атрибута Статья доходов
+          'marketSales' => '925feba1-82ba-11ed-0a80-004000288b85',    // Значение Продажи маркетплейсы атрибута Статья доходов
+        ],
+      ],
+
+      'demands' => [
+        'expand' => 'state,customerOrder,attributes,agent,organization,positions.assortment,owner',
+        'states' => [
+          'acceptBack'        => '2a6c9db5-a7c4-11ed-0a80-10870015e950',
+          'assembled'         => 'eeed10b7-51a2-11ec-0a80-02ee0032e089',
+          'backtostock'       => 'aa7acdbc-a7c9-11ed-0a80-0c71001732ca',
+          'backwithoutbill'   => '0ba2e09c-cda1-11eb-0a80-03110030c70c',
+          'closed'            => '24d4a11f-8af4-11eb-0a80-0122002915d0',
+          'invoiceissued'     => '2ecdeb7b-799b-11eb-0a80-00de001d8587',
+          'todemand'          => 'db67917a-5717-11eb-0a80-079c002b43eb',
+          'transferred'       => '732ffbde-0a19-11eb-0a80-055600083d2e',
+        ],
+
+        'attributesFields' => [
+          'billLink'          => '1ff6c2e8-1c3a-11ec-0a80-06650003408f',
+          'returnBillLink'    => '2362f797-d068-11ec-0a80-0b8a00a44340',
+          'numPlaces'         => 'f1d4a71a-c29a-11eb-0a80-001f0003a1be',
+          'fiscal'            => 'eb46b957-a4e7-11eb-0a80-014c00169cca',
+          'paymentType'       => 'b4b6c6d6-836d-11ed-0a80-07fe00347b40',
+          'paymentStatus'     => '64869eb0-c29d-11eb-0a80-08be00040769',
+          'marketPlaceNum'    => 'db30d9e9-a4e2-11eb-0a80-09b900160bbe',
+          'waybillMark'       => '60dbcc74-a9e6-11ed-0a80-111e001b5386',
+        ],
+
+        'attributesFieldsValues' => [
+          'fiscalYes' => 'c3c0ee4f-a4e7-11eb-0a80-075b00176e05',  // Значение Да в атрибуте Фискальный чек
+          'cashYes'   => '1fd236d5-836d-11ed-0a80-0dbe0033eb31', // Значение Наличные в атрибуте Способ оплаты
+          'payedYes'  => '302da776-c29d-11eb-0a80-093a0003ad4a', // Значение Оплачен в атрибуте Статус оплаты
+        ],
+
+        'upsertDemandAttributes' => [ // 'ID атрибута заказа' => 'ID атрибута отгрузки'
+          '263aa028-2ba1-11ed-0a80-056b000879a8' => '1b0e12b6-3471-11eb-0a80-096400054956', // ✅ Город - Город
+          '8a307d43-3b6a-11ee-0a80-06ae000fd467' => 'b2b883e2-3464-11eb-0a80-00f10003703a', // Служба доставки - Служба доставки
+          '19fb8dcf-94ac-11ed-0a80-0e930023e914' => 'b4b6c6d6-836d-11ed-0a80-07fe00347b40', // Способ оплаты
+          '17545020-4d14-11ed-0a80-0ef600207483' => 'b7665340-75d0-11eb-0a80-0259003872fe', // ✅ Предпочтительная дата доставки - Дата доставки
+          'f313d67e-94ac-11ed-0a80-0e930023fd09' => '452d785a-75d1-11eb-0a80-05af00386c25', // ✅ Предпочтительное время доставки - Время доставки
+          '4e4537e9-a0a2-11ed-0a80-1043003e432d' => 'eb46b957-a4e7-11eb-0a80-014c00169cca', // Нужен ли фискальный чек - ❗️Нужен ли фискальный чек?
+          'a7f0812d-a0a3-11ed-0a80-114f003fc7f9' => 'db30d9e9-a4e2-11eb-0a80-09b900160bbe', // Номер заказа маркетплейса
+          'f27758fb-b05d-11ed-0a80-09ae002b500b' => '64869eb0-c29d-11eb-0a80-08be00040769', // Статус оплаты
+          '45bdad04-68d6-11ee-0a80-095d000776da' => 'b15cb6d6-295c-11ef-0a80-005b0036e745',
+          'dd839a8b-47a1-11ed-0a80-01fb00205e82' => '892e27a6-99f5-11eb-0a80-0451000e89e5' // Проект
+        ],
+      ],
+
+      'orders' => [
+        'expand' => 'state,store,project,attributes,agent,organization,demands,positions.assortment,owner,invoicesOut',
+        'states' => [
+          'approvetodemand' => 'd3e01366-75ca-11eb-0a80-02590037e535',
+          'assembled'       => 'c4d8f685-a7c3-11ed-0a80-10870015dd4a',
+          'back'            => '02482e52-ee91-11ea-0a80-05f200074472',
+          'canceled'        => '02482f22-ee91-11ea-0a80-05f200074473',
+          'completed'       => '02482dd6-ee91-11ea-0a80-05f200074471',
+          'injob'           => 'c58fb0d7-9c2a-11eb-0a80-06480005f781',
+          'invoiceissued'   => '6d4d6565-79a4-11eb-0a80-07bf001ea079',
+          'taketojob'       => '02482aa0-ee91-11ea-0a80-05f20007446d',
+
+        ],
+        'attributesFields' => [
+          'paymentType'   => '19fb8dcf-94ac-11ed-0a80-0e930023e914',
+          'channel'       => '45bdad04-68d6-11ee-0a80-095d000776da',
+          'fiskal'        => '4e4537e9-a0a2-11ed-0a80-1043003e432d',
+          'project'       => 'dd839a8b-47a1-11ed-0a80-01fb00205e82',
+          'paymentStatus' => 'f27758fb-b05d-11ed-0a80-09ae002b500b',
+          'delivery'      => '8a307d43-3b6a-11ee-0a80-06ae000fd467',
+        ],
+      ],
+
+      'kaspiProjects' => [
+        'accio' => '5f351348-d269-11f0-0a80-15120016d622', // 🔴 Kaspi Accio
+        'tutto' => '431a8172-d26a-11f0-0a80-0f110016cabd', // 🔴 Tutto Capsule Kaspi
+        'ital'  => '98777142-d26a-11f0-0a80-1be40016550a', // 🔴 Ital Trade
+      ],
+
+      'woltProject' => 'a463b9da-d26c-11f0-0a80-1a6b0016a57a', // Wolt
+
+      'marketplaceProjects' => [
+        '5f351348-d269-11f0-0a80-15120016d622', // 🔴 Kaspi Accio
+        '431a8172-d26a-11f0-0a80-0f110016cabd', // 🔴 Tutto Capsule Kaspi
+        '98777142-d26a-11f0-0a80-1be40016550a', // 🔴 Ital Trade
+        'a463b9da-d26c-11f0-0a80-1a6b0016a57a', // 🔵 Wolt
+        '842c5548-c90c-11f0-0a80-1aee002c13e9', // 🟢 Halyk Market
+        'a4481c66-d274-11f0-0a80-0f110017905c', // 🟣 Forte Market
+      ],
+
+      'roznProjects' => [
+        '8fe86883-d275-11f0-0a80-15120017c4b6', // 🔥 Store
+        '6b625db1-d270-11f0-0a80-1512001756b3' // 💎 Юридическое лицо
+      ],
+
+      'staticReferenceValues' => [
+        'channelIsWebsite' => '82257929-68d7-11ee-0a80-0f2f0008c9a9', // Значение Сайт из Справочника Каналы связи
+      ],
     ],
 
     'moysklad' => [

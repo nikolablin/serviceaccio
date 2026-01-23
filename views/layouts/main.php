@@ -83,10 +83,10 @@ $serverSpace = System::getFreeSpace();
             NavBar::begin([ 'options' => [ 'class' => '' ]]);
 
             $menuItems = [];
-            if (in_array($userGroup, [1, 2])) {
+            if (in_array($userGroup, [1,2,3])) {
               $menuItems[] = ['label' => 'Отчеты', 'url' => ['/reports'], 'active' => $this->context->route == 'site/reports'];
             }
-            if (in_array($userGroup, [1, 2])) {
+            if (in_array($userGroup, [1,2])) {
               $menuItems[] = ['label' => 'Пользователи', 'url' => ['/users'], 'active' => $this->context->route == 'site/users'];
             }
             if(in_array($userGroup,[1,5])){
@@ -95,7 +95,7 @@ $serverSpace = System::getFreeSpace();
             if(in_array($userGroup,[1,2])){
               $menuItems[] = ['label' => 'Конфигурация заказов', 'url' => ['/ordersconfig'], 'active' => $this->context->route == 'site/ordersconfig'];
             }
-            if(in_array($userGroup,[1,2])){
+            if(in_array($userGroup,[1,2,3])){
               $menuItems[] = ['label' => 'Медиаменеджер', 'url' => ['/mediamanager'], 'active' => $this->context->route == 'site/mediamanager'];
             }
             echo Nav::widget([

@@ -11,6 +11,7 @@ use app\models\Moysklad;
 $this->title = 'Конфигурация заказов';
 $this->params['breadcrumbs'][] = $this->title;
 $projects = $references->projects;
+
 ?>
 
 <div class="site-orders-config">

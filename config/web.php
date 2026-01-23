@@ -45,6 +45,7 @@ $config = [
             // send all mails to a file by default.
             'useFileTransport' => true,
         ],
+
         'log' => [
             'traceLevel' => YII_DEBUG ? 3 : 0,
             'targets' => [
@@ -52,8 +53,45 @@ $config = [
                     'class' => 'yii\log\FileTarget',
                     'levels' => ['error', 'warning'],
                 ],
+
+                // 1) создание заказа
+                [
+                    'class' => yii\log\FileTarget::class,
+                    'levels' => ['info', 'warning', 'error'],
+                    'categories' => ['order.create'],
+                    'logFile' => '@runtime/logs/order_create.log',
+                    'logVars' => [], // важно: не тащим $_SERVER
+                    'prefix' => function () {
+                        return date('Y-m-d H:i:s');
+                    },
+                ],
+
+                // 2) обновление заказа
+                [
+                    'class' => yii\log\FileTarget::class,
+                    'levels' => ['info', 'warning', 'error'],
+                    'categories' => ['order.update'],
+                    'logFile' => '@runtime/logs/order_update.log',
+                    'logVars' => [],
+                    'prefix' => function () {
+                        return date('Y-m-d H:i:s');
+                    },
+                ],
+
+                // 3) обновление отгрузки
+                [
+                    'class' => yii\log\FileTarget::class,
+                    'levels' => ['info', 'warning', 'error'],
+                    'categories' => ['demand.update'],
+                    'logFile' => '@runtime/logs/demand_update.log',
+                    'logVars' => [],
+                    'prefix' => function () {
+                        return date('Y-m-d H:i:s');
+                    },
+                ],
             ],
         ],
+
         'db' => $db,
         'urlManager' => [
             'enablePrettyUrl' => true,

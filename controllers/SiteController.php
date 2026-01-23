@@ -201,10 +201,9 @@ class SiteController extends Controller
       $references->organizations    = $moysklad->getOrganizations();
       $references->channels         = $moysklad->getReference('9c69b3d5-68d5-11ee-0a80-044c0009477e');
       $references->projects         = $moysklad->getProjects($actualProjects);
-
+ 
       return $this->render('ordersconfig',[ 'references' => $references ]);
     }
-
 
     public function actionMediamanager()
     {

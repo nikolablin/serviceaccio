@@ -148,8 +148,8 @@ class CashRegister extends Model
      * DRAFT (DB)
      * ========================================================= */
 
-     public static function uuidV5(string $namespaceUuid, string $name): string
-     {
+    public static function uuidV5(string $namespaceUuid, string $name): string
+    {
          // namespaceUuid должен быть валидным UUID
          $ns = str_replace(['-','{','}'], '', $namespaceUuid);
          if (strlen($ns) !== 32) {

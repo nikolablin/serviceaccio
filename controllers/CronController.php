@@ -187,7 +187,7 @@ class CronController extends Controller
                   switch($order->attributes->deliveryMode){
                     case 'DELIVERY_LOCAL':
                       if($order->attributes->kaspiDelivery->express){
-                        $creatingOrder->deliveryType = $projectConfig->delivery_service; // Kaspi Delivery
+                        $creatingOrder->deliveryType = '90b239fc-8c74-11eb-0a80-03dd0005a26d'; // Kaspi Delivery
                       }
                       else {
                         $creatingOrder->deliveryType = '7f6acbef-b4ee-11ed-0a80-005b003d9e76';

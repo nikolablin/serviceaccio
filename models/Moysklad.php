@@ -915,143 +915,143 @@ class Moysklad extends Model
       return false;
     }
 
-  private function updatePayment($paymentId,$postPayment,$postDate,$state)
-  {
-    $accessdata = self::getMSLoginPassword();
+    private function updatePayment($paymentId,$postPayment,$postDate,$state)
+    {
+      $accessdata = self::getMSLoginPassword();
 
-    $data = array(
+      $data = array(
+          "moment" => $postDate->format('Y-m-d H:i:s'),
+          "applicable" => $postPayment,
+          "incomingDate" => $postDate->format('Y-m-d H:i:s')
+      );
+
+      $paymentState = (object)array();
+      $paymentState->meta = (object)array();
+      $paymentState->meta->href = 'https://api.moysklad.ru/api/remap/1.2/entity/paymentin/metadata/states/' . $state;
+      $paymentState->meta->type = 'state';
+      $paymentState->meta->mediaType = 'application/json';
+      $data['state'] = $paymentState;
+
+      $ch = curl_init('https://api.moysklad.ru/api/remap/1.2/entity/paymentin/' . $paymentId);
+      curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+      curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "PUT");
+      curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+      curl_setopt($ch, CURLOPT_HTTPHEADER, [
+          'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
+          'Accept-Encoding: gzip',
+          'Connection: Keep-Alive',
+          "Content-Type: application/json"
+      ]);
+
+      $response = curl_exec($ch);
+      curl_close($ch);
+
+      if (curl_errno($ch)) {
+        file_put_contents(__DIR__ . '/../paymentUpdateError.txt','Ошибка запроса: ' . curl_error($ch) . PHP_EOL . print_r($data,true) . PHP_EOL . PHP_EOL, FILE_APPEND);
+        return false;
+      }
+
+      return true;
+    }
+
+    private function createPayment($type,$organizationId,$accountId,$contragentId,$paymentTypeId, $paymentSum, $postDate, $issueOut = false, $issueOutNew = false)
+    {
+      $accessdata = self::getMSLoginPassword();
+
+      $data = [
         "moment" => $postDate->format('Y-m-d H:i:s'),
-        "applicable" => $postPayment,
-        "incomingDate" => $postDate->format('Y-m-d H:i:s')
-    );
+        "created" => $postDate->format('Y-m-d H:i:s'),
+        "applicable" => true,
+        "sum" => $paymentSum
+      ];
+      $data['attributes'] = [];
 
-    $paymentState = (object)array();
-    $paymentState->meta = (object)array();
-    $paymentState->meta->href = 'https://api.moysklad.ru/api/remap/1.2/entity/paymentin/metadata/states/' . $state;
-    $paymentState->meta->type = 'state';
-    $paymentState->meta->mediaType = 'application/json';
-    $data['state'] = $paymentState;
+      $paymentState = (object)array();
+      $paymentState->meta = (object)array();
+      $paymentState->meta->href = 'https://api.moysklad.ru/api/remap/1.2/entity/paymentout/metadata/states/1ab07e7d-346a-11eb-0a80-04cd00042316'; // Статус - Оплачен
+      $paymentState->meta->type = 'state';
+      $paymentState->meta->mediaType = 'application/json';
+      $data['state'] = $paymentState;
 
-    $ch = curl_init('https://api.moysklad.ru/api/remap/1.2/entity/paymentin/' . $paymentId);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "PUT");
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
-        'Accept-Encoding: gzip',
-        'Connection: Keep-Alive',
-        "Content-Type: application/json"
-    ]);
+      $organization = (object)array();
+      $organization->meta = (object)array();
+      $organization->meta->href = 'https://api.moysklad.ru/api/remap/1.2/entity/organization/' . $organizationId;
+      $organization->meta->metadataHref = 'https://api.moysklad.ru/api/remap/1.2/entity/organization/metadata';
+      $organization->meta->type = 'organization';
+      $organization->meta->mediaType = 'application/json';
+      $data['organization'] = $organization;
 
-    $response = curl_exec($ch);
-    curl_close($ch);
+      $account = (object)array();
+      $account->meta = (object)array();
+      $account->meta->href = 'https://api.moysklad.ru/api/remap/1.2/entity/organization/' . $organizationId . '/accounts/' . $accountId;
+      $account->meta->type = 'account';
+      $account->meta->mediaType = 'application/json';
+      $data['organizationAccount'] = $account;
 
-    if (curl_errno($ch)) {
-      file_put_contents(__DIR__ . '/../paymentUpdateError.txt','Ошибка запроса: ' . curl_error($ch) . PHP_EOL . print_r($data,true) . PHP_EOL . PHP_EOL, FILE_APPEND);
-      return false;
+      $agent = (object)array();
+      $agent->meta = (object)array();
+      $agent->meta->href = 'https://api.moysklad.ru/api/remap/1.2/entity/counterparty/' . $contragentId;
+      $agent->meta->metadataHref = 'https://api.moysklad.ru/api/remap/1.2/entity/counterparty/metadata';
+      $agent->meta->type = 'counterparty';
+      $agent->meta->mediaType = 'application/json';
+      $data['agent'] = $agent;
+
+      $expenseItem = (object)array();
+      $expenseItem->meta = (object)array();
+      $expenseItem->meta->href = 'https://api.moysklad.ru/api/remap/1.2/entity/expenseitem/' . $issueOut;
+      // $expenseItem->meta->metadataHref = 'https://api.moysklad.ru/api/remap/1.2/entity/expenseitem/metadata';
+      $expenseItem->meta->type = 'expenseitem';
+      $expenseItem->meta->mediaType = 'application/json';
+      $data['expenseItem'] = $expenseItem;
+
+      $expenseItemNew = (object)array();
+      $expenseItemNew->meta = (object)array();
+      $expenseItemNew->meta->href = 'https://api.moysklad.ru/api/remap/1.2/entity/paymentout/metadata/attributes/0a881597-d3e4-11ef-0a80-03bb0005cf5b';
+      $expenseItemNew->meta->type = 'attributemetadata';
+      $expenseItemNew->meta->mediaType = 'application/json';
+      $expenseItemNew->value = (object)array();
+      $expenseItemNew->value->meta = (object)array();
+      $expenseItemNew->value->meta->href = 'https://api.moysklad.ru/api/remap/1.2/entity/customentity/18db383a-d3e0-11ef-0a80-181f00052878/' . $issueOutNew;
+      $expenseItemNew->value->meta->metadataHref = 'https://api.moysklad.ru/api/remap/1.2/context/companysettings/metadata/customEntities/18db383a-d3e0-11ef-0a80-181f00052878';
+      $expenseItemNew->value->meta->type = 'customentity';
+      $expenseItemNew->value->meta->mediaType = 'application/json';
+      $data['attributes'][] = $expenseItemNew;
+
+      $paymentType = (object)array();
+      $paymentType->meta = (object)array();
+      $paymentType->meta->href = 'https://api.moysklad.ru/api/remap/1.2/entity/paymentout/metadata/attributes/e7b6111b-d3e5-11ef-0a80-03bb0006387b';
+      $paymentType->meta->type = 'attributemetadata';
+      $paymentType->meta->mediaType = 'application/json';
+      $paymentType->value = (object)array();
+      $paymentType->value->meta = (object)array();
+      $paymentType->value->meta->href = 'https://api.moysklad.ru/api/remap/1.2/entity/customentity/a614ce40-d3e5-11ef-0a80-06860006697b/00954746-d3e6-11ef-0a80-03bb00064723';
+      $paymentType->value->meta->metadataHref = 'https://api.moysklad.ru/api/remap/1.2/context/companysettings/metadata/customEntities/a614ce40-d3e5-11ef-0a80-06860006697b';
+      $paymentType->value->meta->type = 'customentity';
+      $paymentType->value->meta->mediaType = 'application/json';
+      $data['attributes'][] = $paymentType;
+
+      $ch = curl_init('https://api.moysklad.ru/api/remap/1.2/entity/paymentout');
+      curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+      curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+      curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+      curl_setopt($ch, CURLOPT_ENCODING, '');
+      curl_setopt($ch, CURLOPT_HTTPHEADER, [
+          'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
+          'Accept-Encoding: gzip',
+          'Connection: Keep-Alive',
+          "Content-Type: application/json"
+      ]);
+
+      $response = curl_exec($ch);
+      curl_close($ch);
+
+      if (curl_errno($ch)) {
+        file_put_contents(__DIR__ . '/../paymentUpdateError.txt','Ошибка запроса: ' . curl_error($ch) . PHP_EOL . print_r($data,true) . PHP_EOL . PHP_EOL, FILE_APPEND);
+        return false;
+      }
+
+      return true;
     }
-
-    return true;
-  }
-
-  private function createPayment($type,$organizationId,$accountId,$contragentId,$paymentTypeId, $issueOut = false, $issueOutNew = false, $paymentSum, $postDate)
-  {
-    $accessdata = self::getMSLoginPassword();
-
-    $data = [
-      "moment" => $postDate->format('Y-m-d H:i:s'),
-      "created" => $postDate->format('Y-m-d H:i:s'),
-      "applicable" => true,
-      "sum" => $paymentSum
-    ];
-    $data['attributes'] = [];
-
-    $paymentState = (object)array();
-    $paymentState->meta = (object)array();
-    $paymentState->meta->href = 'https://api.moysklad.ru/api/remap/1.2/entity/paymentout/metadata/states/1ab07e7d-346a-11eb-0a80-04cd00042316'; // Статус - Оплачен
-    $paymentState->meta->type = 'state';
-    $paymentState->meta->mediaType = 'application/json';
-    $data['state'] = $paymentState;
-
-    $organization = (object)array();
-    $organization->meta = (object)array();
-    $organization->meta->href = 'https://api.moysklad.ru/api/remap/1.2/entity/organization/' . $organizationId;
-    $organization->meta->metadataHref = 'https://api.moysklad.ru/api/remap/1.2/entity/organization/metadata';
-    $organization->meta->type = 'organization';
-    $organization->meta->mediaType = 'application/json';
-    $data['organization'] = $organization;
-
-    $account = (object)array();
-    $account->meta = (object)array();
-    $account->meta->href = 'https://api.moysklad.ru/api/remap/1.2/entity/organization/' . $organizationId . '/accounts/' . $accountId;
-    $account->meta->type = 'account';
-    $account->meta->mediaType = 'application/json';
-    $data['organizationAccount'] = $account;
-
-    $agent = (object)array();
-    $agent->meta = (object)array();
-    $agent->meta->href = 'https://api.moysklad.ru/api/remap/1.2/entity/counterparty/' . $contragentId;
-    $agent->meta->metadataHref = 'https://api.moysklad.ru/api/remap/1.2/entity/counterparty/metadata';
-    $agent->meta->type = 'counterparty';
-    $agent->meta->mediaType = 'application/json';
-    $data['agent'] = $agent;
-
-    $expenseItem = (object)array();
-    $expenseItem->meta = (object)array();
-    $expenseItem->meta->href = 'https://api.moysklad.ru/api/remap/1.2/entity/expenseitem/' . $issueOut;
-    // $expenseItem->meta->metadataHref = 'https://api.moysklad.ru/api/remap/1.2/entity/expenseitem/metadata';
-    $expenseItem->meta->type = 'expenseitem';
-    $expenseItem->meta->mediaType = 'application/json';
-    $data['expenseItem'] = $expenseItem;
-
-    $expenseItemNew = (object)array();
-    $expenseItemNew->meta = (object)array();
-    $expenseItemNew->meta->href = 'https://api.moysklad.ru/api/remap/1.2/entity/paymentout/metadata/attributes/0a881597-d3e4-11ef-0a80-03bb0005cf5b';
-    $expenseItemNew->meta->type = 'attributemetadata';
-    $expenseItemNew->meta->mediaType = 'application/json';
-    $expenseItemNew->value = (object)array();
-    $expenseItemNew->value->meta = (object)array();
-    $expenseItemNew->value->meta->href = 'https://api.moysklad.ru/api/remap/1.2/entity/customentity/18db383a-d3e0-11ef-0a80-181f00052878/' . $issueOutNew;
-    $expenseItemNew->value->meta->metadataHref = 'https://api.moysklad.ru/api/remap/1.2/context/companysettings/metadata/customEntities/18db383a-d3e0-11ef-0a80-181f00052878';
-    $expenseItemNew->value->meta->type = 'customentity';
-    $expenseItemNew->value->meta->mediaType = 'application/json';
-    $data['attributes'][] = $expenseItemNew;
-
-    $paymentType = (object)array();
-    $paymentType->meta = (object)array();
-    $paymentType->meta->href = 'https://api.moysklad.ru/api/remap/1.2/entity/paymentout/metadata/attributes/e7b6111b-d3e5-11ef-0a80-03bb0006387b';
-    $paymentType->meta->type = 'attributemetadata';
-    $paymentType->meta->mediaType = 'application/json';
-    $paymentType->value = (object)array();
-    $paymentType->value->meta = (object)array();
-    $paymentType->value->meta->href = 'https://api.moysklad.ru/api/remap/1.2/entity/customentity/a614ce40-d3e5-11ef-0a80-06860006697b/00954746-d3e6-11ef-0a80-03bb00064723';
-    $paymentType->value->meta->metadataHref = 'https://api.moysklad.ru/api/remap/1.2/context/companysettings/metadata/customEntities/a614ce40-d3e5-11ef-0a80-06860006697b';
-    $paymentType->value->meta->type = 'customentity';
-    $paymentType->value->meta->mediaType = 'application/json';
-    $data['attributes'][] = $paymentType;
-
-    $ch = curl_init('https://api.moysklad.ru/api/remap/1.2/entity/paymentout');
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-    curl_setopt($ch, CURLOPT_ENCODING, '');
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
-        'Accept-Encoding: gzip',
-        'Connection: Keep-Alive',
-        "Content-Type: application/json"
-    ]);
-
-    $response = curl_exec($ch);
-    curl_close($ch);
-
-    if (curl_errno($ch)) {
-      file_put_contents(__DIR__ . '/../paymentUpdateError.txt','Ошибка запроса: ' . curl_error($ch) . PHP_EOL . print_r($data,true) . PHP_EOL . PHP_EOL, FILE_APPEND);
-      return false;
-    }
-
-    return true;
-  }
 
   public function postPaymentInInformation($bank,$orderId,$paymentDate)
   {
@@ -1107,7 +1107,7 @@ class Moysklad extends Model
         break;
     }
 
-    self::createPayment('out',$organizationId,$accountId,$contragent,$paymentType,$issueOut,$issueOutNew,$paymentSum,$paymentDate);
+    self::createPayment('out',$organizationId,$accountId,$contragent,$paymentType,$paymentSum,$paymentDate,$issueOut,$issueOutNew);
 
     return true;
   }
@@ -1708,6 +1708,8 @@ class Moysklad extends Model
       if ($link && !empty($link->moysklad_demand_id)) {
           // UPDATE demand
 
+          $demandId = $link->moysklad_demand_id;
+
           // Проверка на теекущие позиции
           $currentDemand = $this->getHrefData( 'https://api.moysklad.ru/api/remap/1.2/entity/demand/' . $demandId . '?expand=positions' );
           $orderRows  = $msorder->positions->rows ?? [];
@@ -1726,8 +1728,6 @@ class Moysklad extends Model
                   FILE_APPEND
               );
           }
-
-          $demandId = $link->moysklad_demand_id;
 
           $url = 'https://api.moysklad.ru/api/remap/1.2/entity/demand/' . $demandId;
 
@@ -2467,7 +2467,7 @@ class Moysklad extends Model
       }
 
       $payload = [
-          'state'        => ['meta' => self::buildStateMeta('invoiceout',YII::$app->params['moysklad']['invoiceOutStateIssued'])],
+          'state'        => ['meta' => $this->buildStateMeta('invoiceout',YII::$app->params['moysklad']['invoiceOutStateIssued'])],
           'store'        => ['meta' => $storeMeta],
           'project'      => ['meta' => $projectMeta],
           'agent'        => ['meta' => $agentMeta],
@@ -2479,51 +2479,51 @@ class Moysklad extends Model
       return $payload;
   }
 
-  // public function hasInvoiceOutForOrder(string $msOrderId): bool
-  // {
-  //     $accessdata = self::getMSLoginPassword();
-  //
-  //     // фильтр по customerOrder
-  //     $orderHref = "https://api.moysklad.ru/api/remap/1.2/entity/customerorder/{$msOrderId}";
-  //
-  //     // в filter спецсимволы, поэтому urlencode
-  //     $url = 'https://api.moysklad.ru/api/remap/1.2/entity/invoiceout'
-  //         . '?limit=1'
-  //         . '&filter=' . rawurlencode('customerOrder=' . $orderHref);
-  //
-  //     $ch = curl_init($url);
-  //     curl_setopt_array($ch, [
-  //         CURLOPT_RETURNTRANSFER => true,
-  //         CURLOPT_CUSTOMREQUEST  => 'GET',
-  //         CURLOPT_ENCODING       => 'gzip',
-  //         CURLOPT_HTTPHEADER     => [
-  //             'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
-  //             'Accept-Encoding: gzip',
-  //         ],
-  //         CURLOPT_TIMEOUT        => (int)(Yii::$app->params['moysklad']['httpTimeout'] ?? 20),
-  //     ]);
-  //
-  //     $response = curl_exec($ch);
-  //     $errNo = curl_errno($ch);
-  //     $err   = $errNo ? curl_error($ch) : null;
-  //     $code  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-  //     curl_close($ch);
-  //
-  //     if ($errNo || $code < 200 || $code >= 300) {
-  //         file_put_contents(__DIR__ . '/../logs/ms_service/createcustomerorder.txt',
-  //             "INVOICEOUT CHECK error. HTTP={$code} ERR={$err}\nResp={$response}\nURL={$url}\n\n",
-  //             FILE_APPEND
-  //         );
-  //
-  //         // если чек не удался — безопаснее НЕ создавать дубликат
-  //         return true;
-  //     }
-  //
-  //     $obj = json_decode($response);
-  //     $rows = $obj->rows ?? [];
-  //
-  //     return !empty($rows);
-  // }
+  public function hasInvoiceOutForOrder(string $msOrderId): bool
+  {
+      $accessdata = self::getMSLoginPassword();
+
+      // фильтр по customerOrder
+      $orderHref = "https://api.moysklad.ru/api/remap/1.2/entity/customerorder/{$msOrderId}";
+
+      // в filter спецсимволы, поэтому urlencode
+      $url = 'https://api.moysklad.ru/api/remap/1.2/entity/invoiceout'
+          . '?limit=1'
+          . '&filter=' . rawurlencode('customerOrder=' . $orderHref);
+
+      $ch = curl_init($url);
+      curl_setopt_array($ch, [
+          CURLOPT_RETURNTRANSFER => true,
+          CURLOPT_CUSTOMREQUEST  => 'GET',
+          CURLOPT_ENCODING       => 'gzip',
+          CURLOPT_HTTPHEADER     => [
+              'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
+              'Accept-Encoding: gzip',
+          ],
+          CURLOPT_TIMEOUT        => (int)(Yii::$app->params['moysklad']['httpTimeout'] ?? 20),
+      ]);
+
+      $response = curl_exec($ch);
+      $errNo = curl_errno($ch);
+      $err   = $errNo ? curl_error($ch) : null;
+      $code  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+      curl_close($ch);
+
+      if ($errNo || $code < 200 || $code >= 300) {
+          file_put_contents(__DIR__ . '/../logs/ms_service/createcustomerorder.txt',
+              "INVOICEOUT CHECK error. HTTP={$code} ERR={$err}\nResp={$response}\nURL={$url}\n\n",
+              FILE_APPEND
+          );
+
+          // если чек не удался — безопаснее НЕ создавать дубликат
+          return true;
+      }
+
+      $obj = json_decode($response);
+      $rows = $obj->rows ?? [];
+
+      return !empty($rows);
+  }
 
   public function updateInvoiceOutState(string $invoiceOutId, array $stateMeta)
   {
@@ -2842,7 +2842,7 @@ class Moysklad extends Model
   {
       foreach (($entity->attributes ?? []) as $attr) {
           // у тебя resolver проверяет ($attr->id === $attrId)
-          if (($attr->id ?? null) !== $attrId) continue;
+          if (($attr->id ?? null) !== $attrId) continue; 
 
           $href = $attr->value->meta->href ?? null;
           return $href ? basename($href) : null;
@@ -2852,17 +2852,17 @@ class Moysklad extends Model
 
   public function updateDemandApplicable(string $demandId, bool $applicable)
   {
-     return $this->put("entity/demand/{$demandId}", ['applicable' => $applicable]);
+     return $this->requestJson('PUT',"entity/demand/{$demandId}", ['applicable' => $applicable]);
   }
 
   public function updateOrderApplicable(string $orderId, bool $applicable)
   {
-     return $this->put("entity/customerorder/{$orderId}", ['applicable' => $applicable]);
+     return $this->requestJson('PUT',"entity/customerorder/{$orderId}", ['applicable' => $applicable]);
   }
 
   public function updateInvoiceOutApplicable(string $invoiceId, bool $applicable)
   {
-     return $this->put("entity/invoiceout/{$invoiceId}", ['applicable' => $applicable]);
+     return $this->requestJson('PUT',"entity/invoiceout/{$invoiceId}", ['applicable' => $applicable]);
   }
 
   public function createSalesReturnFromDemand(object $order, object $demand): array

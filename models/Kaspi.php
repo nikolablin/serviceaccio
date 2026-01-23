@@ -198,45 +198,102 @@ class Kaspi extends Model
     return $points;
   }
 
-  public static function getKaspiOrder($orderId,$shopkey,$checkwaybill = false)
+
+  public static function getKaspiOrder(
+      string $orderId,
+      string $shopkey,
+      bool $checkWaybill = false,
+      int $maxAttempts = 5,
+      int $sleepSec = 3
+  ): ?object
   {
-    $token = Yii::$app->params['moysklad']['kaspiTokens'][$shopkey];
+      $token = Yii::$app->params['moysklad']['kaspiTokens'][$shopkey] ?? null;
 
-    $curl = curl_init();
-    $goreturn = false;
+      $curl = curl_init();
+      $attempt = 0;
 
-    do {
-      sleep(3);
+      while ($attempt < $maxAttempts) {
+          if ($attempt > 0) {
+              sleep($sleepSec);
+          }
 
-      curl_setopt_array($curl, array(
-        CURLOPT_URL => 'https://kaspi.kz/shop/api/v2/orders?filter[orders][code]=' . $orderId,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_ENCODING => '',
-        CURLOPT_MAXREDIRS => 10,
-        CURLOPT_TIMEOUT => 0,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-        CURLOPT_CUSTOMREQUEST => 'GET',
-        CURLOPT_HTTPHEADER => array(
-          'X-Auth-Token: ' . $token
-        ),
-      ));
+          $attempt++;
 
-      $response = curl_exec($curl);
+          curl_setopt_array($curl, [
+              CURLOPT_URL => 'https://kaspi.kz/shop/api/v2/orders?filter[orders][code]=' . rawurlencode($orderId),
+              CURLOPT_RETURNTRANSFER => true,
+              CURLOPT_TIMEOUT => 20,
+              CURLOPT_FOLLOWLOCATION => true,
+              CURLOPT_HTTPHEADER => [
+                  'X-Auth-Token: ' . $token,
+              ],
+          ]);
 
-      if($checkwaybill){
-        if(!empty(json_decode($response)->data[0]->attributes->kaspiDelivery->waybill)){
-          $goreturn = true;
-        }
+          $response = curl_exec($curl);
+
+          $json = json_decode($response);
+          if (!is_object($json) || empty($json->data[0])) {
+              continue;
+          }
+
+          // если waybill не нужен — сразу возвращаем
+          if (!$checkWaybill) {
+              curl_close($curl);
+              return $json;
+          }
+
+          // ждём появления накладной
+          $waybill = $json->data[0]->attributes->kaspiDelivery->waybill ?? null;
+          if (!empty($waybill)) {
+              curl_close($curl);
+              return $json;
+          }
       }
-      else {
-        $goreturn = true;
-      }
 
-    } while ( $goreturn == false );
+      curl_close($curl);
 
-    return json_decode($response);
+      return null;
   }
+
+  // public static function getKaspiOrder($orderId,$shopkey,$checkwaybill = false, int $maxAttempts = 5, int $sleepSec = 3)
+  // {
+  //   $token = Yii::$app->params['moysklad']['kaspiTokens'][$shopkey];
+  //
+  //   $curl = curl_init();
+  //   $goreturn = false;
+  //
+  //   do {
+  //     sleep(3);
+  //
+  //     curl_setopt_array($curl, array(
+  //       CURLOPT_URL => 'https://kaspi.kz/shop/api/v2/orders?filter[orders][code]=' . $orderId,
+  //       CURLOPT_RETURNTRANSFER => true,
+  //       CURLOPT_ENCODING => '',
+  //       CURLOPT_MAXREDIRS => 10,
+  //       CURLOPT_TIMEOUT => 0,
+  //       CURLOPT_FOLLOWLOCATION => true,
+  //       CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+  //       CURLOPT_CUSTOMREQUEST => 'GET',
+  //       CURLOPT_HTTPHEADER => array(
+  //         'X-Auth-Token: ' . $token
+  //       ),
+  //     ));
+  //
+  //     $response = curl_exec($curl);
+  //
+  //     if($checkwaybill){
+  //       if(!empty(json_decode($response)->data[0]->attributes->kaspiDelivery->waybill)){
+  //         $goreturn = true;
+  //       }
+  //     }
+  //     else {
+  //       $goreturn = true;
+  //     }
+  //
+  //   } while ( $goreturn == false );
+  //
+  //   return json_decode($response);
+  // }
 
   public function setKaspiReadyForDelivery($kaspiOrderCode,$numberOfPlaces,$status,$projectId)
   {
@@ -266,6 +323,61 @@ class Kaspi extends Model
     }
 
     switch($status) {
+      case 'readyForDeliveryV2':
+        $dbOrder = KaspiOrders::findByCode($order->orderId);
+
+        if (!$dbOrder) {
+            $telegram->sendTelegramMessage(
+                'Kaspi readyForDelivery: заказ #' . $order->orderId . ' (' . $order->shopId . ') не найден в БД.',
+                'kaspi'
+            );
+            return;
+        }
+
+        $order->orderExtId = $dbOrder->extOrderId;
+
+        // Идемпотентность: выполняем дальше только если статус "created"
+        if (($dbOrder->status ?? null) !== 'created') {
+            return;
+        }
+
+        // В Kaspi меняем статус заказа
+        self::setKaspiOrderStatus($order, 'ASSEMBLE', $order->shopId);
+        $telegram->sendTelegramMessage(
+            'Заказ Kaspi #' . $order->orderId . ' (' . $order->shopId . ') успешно помечен к отправке.',
+            'kaspi'
+        );
+
+        // В БД обновляем статус через модель
+        $dbOrder->updateStatus('assemble');
+
+        // Если waybill уже записан — не повторяем
+        if (!empty($dbOrder->waybill)) {
+            return $dbOrder->waybill;
+        }
+
+        // Получаем waybill (из API Kaspi)
+        $orderData = self::getKaspiOrder($order->orderId, $order->shopId, true);
+
+        $waybillLink = null;
+        if (!empty($orderData->data) && !empty($orderData->data[0]->attributes->kaspiDelivery->waybill)) {
+            $waybillLink = $orderData->data[0]->attributes->kaspiDelivery->waybill;
+        }
+
+        if (!$waybillLink) {
+            // Накладной нет — просто выходим
+            return false;
+        }
+
+        $dbOrder->saveWaybill($waybillLink);
+
+        $telegram->sendTelegramMessage(
+            'Заказ Kaspi #' . $order->orderId . ' (' . $order->shopId . ') - накладная успешно добавлена!',
+            'kaspi'
+        );
+
+        return $waybillLink;
+        break;
       case 'readyForDelivery':
         $dbOrder = KaspiOrders::findByCode($order->orderId);
 

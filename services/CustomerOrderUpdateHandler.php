@@ -201,7 +201,6 @@ class CustomerOrderUpdateHandler
         $allowStates = Yii::$app->params['moysklad']['allowDemandStates'] ?? [];
 
         if ($stateId && in_array($stateId, $allowStates, true)) {
-
             // 0) Быстрая проверка: если уже есть связь — это update ветка, а не create
             $link = OrdersDemands::findOne(['moysklad_order_id' => (string)$order->id]);
             $options = ['sync_positions' => true];

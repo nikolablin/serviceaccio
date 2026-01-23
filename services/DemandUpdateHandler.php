@@ -3,6 +3,7 @@
 namespace app\services;
 
 use Yii;
+
 use app\models\Moysklad;
 use app\models\Orders;
 use app\models\OrdersDemands;
@@ -36,6 +37,11 @@ class DemandUpdateHandler
           return;
         }
 
+        file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
+            '1123' . print_r($event,true),
+            FILE_APPEND
+        );
+ 
         // Принудительно торможу на 2 секунды, чтобы второй вебхук не шарахнул по первому
         sleep(2);
 
@@ -92,7 +98,7 @@ class DemandUpdateHandler
 
         $STATE_DEMAND_DO_RETURN       = $cfg['stateDemandDoReturn'] ?? '';
 
-        $STATE_ORDER_RETURN_FINAL     = $cfg['stateOrderReturn'];
+        $STATE_ORDER_RETURN_FINAL     = $cfg['stateOrderReturn'] ?? '';
 
         /**
          * 3️⃣ Находим связанные заказы локально
@@ -270,7 +276,7 @@ class DemandUpdateHandler
                 }
 
                 // Если заказ Wolt, то отправить им метку, что заказ собран
-                if($msOrder->project->id == YII::$app->params['moysklad']['woltProject']){
+                if($msOrder->project->id == Yii::$app->params['moysklad']['woltProject']){
                   $woltOrderNum = $moysklad->getProductAttribute($msOrder->attributes,'a7f0812d-a0a3-11ed-0a80-114f003fc7f9');
                   $woltOrderNum = (!$woltOrderNum) ? false : $woltOrderNum->value;
 
@@ -671,28 +677,29 @@ class DemandUpdateHandler
                         "RESERVE FAIL demand={$demand->id} docType={$docType} msg={$e->getMessage()}\n",
                         FILE_APPEND
                     );
+                    return;
                 }
 
                 // 2) Создаём документ в МС
                 $orderNum = $moysklad->getProductAttribute($msOrder->attributes,'a7f0812d-a0a3-11ed-0a80-114f003fc7f9');
                 $orderNum = (!$orderNum) ? '-' : $orderNum->value;
 
-                $paymentType = $moysklad->getProductAttribute($msOrder->attributes,YII::$app->params['moysklad']['paymentTypeAttrId']);
+                $paymentType = $moysklad->getProductAttribute($msOrder->attributes,Yii::$app->params['moysklad']['paymentTypeAttrId']);
                 $paymentTypeMeta = (!$paymentType) ? false : $paymentType->value;
 
-                if(in_array($msOrder->project->id,YII::$app->params['moysklad']['incomeIssues']['marketplaceProjects'])){
-                  $incomeIssueAttrVal = YII::$app->params['moysklad']['incomeIssues']['marketProdaji'];
+                if(in_array($msOrder->project->id,Yii::$app->params['moysklad']['incomeIssues']['marketplaceProjects'])){
+                  $incomeIssueAttrVal = Yii::$app->params['moysklad']['incomeIssues']['marketProdaji'];
                 }
                 else {
-                  $incomeIssueAttrVal = YII::$app->params['moysklad']['incomeIssues']['roznProdaji'];
+                  $incomeIssueAttrVal = Yii::$app->params['moysklad']['incomeIssues']['roznProdaji'];
                 }
 
                 switch($docType){
                   case 'cashin':
-                    $incomeIssueAttr = YII::$app->params['moysklad']['incomeIssues']['cashinIssueAttrId'];
+                    $incomeIssueAttr = Yii::$app->params['moysklad']['incomeIssues']['cashinIssueAttrId'];
                     break;
                   default:
-                    $incomeIssueAttr = YII::$app->params['moysklad']['incomeIssues']['paymentIssueAttrId'];
+                    $incomeIssueAttr = Yii::$app->params['moysklad']['incomeIssues']['paymentIssueAttrId'];
                 }
 
                 $resDoc = ($docType === 'cashin')
