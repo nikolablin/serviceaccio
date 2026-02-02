@@ -16,9 +16,11 @@ class Context
     private ?object $invoiceOut = null;
     private ?object $paymentIn = null;
     private ?object $cashIn = null;
+    private ?object $salesreturn = null;
 
     public ?string $msOrderId = null;
     public ?string $msDemandId = null;
+    public ?string $msSalesreturnId = null;
 
 
     private ?MoyskladV2 $ms = null;
@@ -35,7 +37,7 @@ class Context
 
     public function ms(): MoyskladV2
     {
-        if ($this->ms === null) { 
+        if ($this->ms === null) {
             $this->ms = new MoyskladV2();
         }
         return $this->ms;
@@ -47,6 +49,7 @@ class Context
         if ($this->msOrder !== null) {
             return $this->msOrder;
         }
+
 
         // 1) если у нас событие по заказу — id есть
         if ($this->msOrderId) {
@@ -142,6 +145,45 @@ class Context
         return null;
     }
 
+    public function getDemandFromSalesreturn(?object $salesreturn = null): ?object
+    {
+        $salesreturn = $salesreturn ?: $this->getSalesreturn();
+        if (!$salesreturn) return null;
+
+        $href = $salesreturn->demand->meta->href ?? null;
+        if (!$href || !is_string($href)) return null;
+
+        // expand для demand (как у тебя в params)
+        $expand = Yii::$app->params['moyskladv2']['demands']['expand'] ?? '';
+        if ($expand) {
+            $href .= (str_contains($href, '?') ? '&' : '?') . 'expand=' . rawurlencode($expand);
+        }
+
+        $demand = $this->ms()->getHrefData($href);
+        if (!$demand || empty($demand->id)) return null;
+
+        // запомним в контексте, чтобы дальше Context::getDemand() возвращал уже это
+        $this->msDemand   = $demand;
+        $this->msDemandId = (string)$demand->id;
+
+        // если positions не развернулись — дотянем rows с assortment
+        if (
+            isset($this->msDemand->positions)
+            && (!isset($this->msDemand->positions->rows) || !is_array($this->msDemand->positions->rows))
+            && isset($this->msDemand->positions->meta->href)
+        ) {
+            $posHref = (string)$this->msDemand->positions->meta->href;
+            $posHref .= (str_contains($posHref, '?') ? '&' : '?') . 'expand=' . rawurlencode('assortment');
+
+            $pos = $this->ms()->getHrefData($posHref);
+            if ($pos && isset($pos->rows) && is_array($pos->rows)) {
+                $this->msDemand->positions->rows = $pos->rows;
+            }
+        }
+
+        return $this->msDemand;
+    }
+
     /* Вернет объект счета покупателю из МС (если возможно) */
     public function getInvoice(): ?object
     {
@@ -169,6 +211,41 @@ class Context
         return null;
     }
 
+    public function getSalesreturn(): ?object
+    {
+        if ($this->salesreturn !== null) {
+            return $this->salesreturn;
+        }
+
+        // 1) Если событие по salesreturn — грузим напрямую по id
+        if ($this->msSalesreturnId) {
+            $this->salesreturn = $this->ms()->getHrefData(
+                "https://api.moysklad.ru/api/remap/1.2/entity/salesreturn/" . $this->msSalesreturnId
+            );
+            return $this->salesreturn;
+        }
+
+        // 2) Фоллбек: если есть demand — попробуем взять returns[0] из demand
+        $demand = $this->getDemand();
+        if (!$demand) return null;
+
+        $href = null;
+        if (!empty($demand->returns) && is_array($demand->returns)) {
+            $href = $demand->returns[0]->meta->href ?? null;
+        }
+
+        if ($href && is_string($href)) {
+            $sr = $this->ms()->getHrefData($href);
+            if ($sr && !empty($sr->id)) {
+                $this->salesreturn = $sr;
+                $this->msSalesreturnId = (string)$sr->id;
+                return $this->salesreturn;
+            }
+        }
+
+        return null;
+    }
+
     public function getPaymentIn(): ?object
     {
         if ($this->paymentIn !== null) {
@@ -182,7 +259,7 @@ class Context
         if (!empty($demand->payments) && is_array($demand->payments)) {
             foreach ($demand->payments as $p) {
                 if (($p->meta->type ?? null) === 'paymentin') {
-                    $this->paymentIn = $this->moysklad->getHrefData((string)$p->meta->href);
+                    $this->paymentIn = $this->ms()->getHrefData((string)$p->meta->href);
                     return $this->paymentIn;
                 }
             }
@@ -198,12 +275,12 @@ class Context
         }
 
         $demand = $this->getDemand();
-        if (!$order) { return null; }
+        if (!$demand) { return null; }
 
         if (!empty($demand->payments) && is_array($demand->payments)) {
             foreach ($demand->payments as $p) {
                 if (($p->meta->type ?? null) === 'cashin') {
-                    $this->cashIn = $this->moysklad->getHrefData((string)$p->meta->href);
+                    $this->cashIn = $this->ms()->getHrefData((string)$p->meta->href);
                     return $this->cashIn;
                 }
             }
@@ -222,7 +299,7 @@ class Context
         if (!$order) {
             return null;
         }
-
+ 
         $resolver = new OrdersConfigResolverV2();
         $this->config = $resolver->resolve($order, $this->ms());
 
@@ -240,5 +317,6 @@ class Context
 
         if ($type === 'customerorder') $this->msOrderId = $entityId;
         if ($type === 'demand')        $this->msDemandId = $entityId;
+        if ($type === 'salesreturn')        $this->msSalesreturnId = $entityId;
     }
 }

@@ -150,9 +150,10 @@ class SiteController extends Controller
 
         $userId = Yii::$app->db->getLastInsertID();
 
+
         $userGroup = new UserGroups();
         $userGroup->user_id = $userId;
-        $userGroup->group_id = Yii::$app->request->post()['group_id'];  // ID группы, которую нужно назначить пользователю
+        $userGroup->group_id = Yii::$app->request->post()['SignupForm']['group_id'];  // ID группы, которую нужно назначить пользователю
 
         // Сохраняем запись в таблицу
         if ($userGroup->save()) {
@@ -186,7 +187,7 @@ class SiteController extends Controller
     }
 
     public function actionOrdersconfig()
-    {
+    { 
       $this->getView()->registerAssetBundle(\app\assets\OrdersConfigAsset::class);
 
       $moysklad = new Moysklad();
@@ -201,7 +202,7 @@ class SiteController extends Controller
       $references->organizations    = $moysklad->getOrganizations();
       $references->channels         = $moysklad->getReference('9c69b3d5-68d5-11ee-0a80-044c0009477e');
       $references->projects         = $moysklad->getProjects($actualProjects);
- 
+
       return $this->render('ordersconfig',[ 'references' => $references ]);
     }
 

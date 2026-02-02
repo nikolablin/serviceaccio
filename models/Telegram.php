@@ -23,6 +23,7 @@ class Telegram extends Model {
 
     switch ($type) {
       case 'kaspi':
+      case 'wolt':
         $chatId = $telegramData->kaspiChat;
         break;
       case 'cancelled':

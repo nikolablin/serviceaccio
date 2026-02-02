@@ -113,4 +113,74 @@ class MoyskladWebhook extends Model
       // return json_decode($response, true);
   }
 
+  public static function disableWebhook($webhookId)
+  {
+      $moysklad = new Moysklad();
+      $access = $moysklad->getMSLoginPassword();
+
+      $endpoint = "https://api.moysklad.ru/api/remap/1.2/entity/webhook/" . $webhookId;
+
+      $data = [
+          "enabled"    => false
+      ];
+
+      $ch = curl_init($endpoint);
+
+      curl_setopt_array($ch, [
+          CURLOPT_RETURNTRANSFER => true,
+          CURLOPT_CUSTOMREQUEST  => "PUT",
+          CURLOPT_HTTPHEADER     => [
+              "Authorization: Basic " . base64_encode($access->login . ':' . $access->password),
+              "Content-Type: application/json"
+          ],
+          CURLOPT_ENCODING       => "",
+          CURLOPT_POSTFIELDS     => json_encode($data, JSON_UNESCAPED_UNICODE),
+      ]);
+
+      $response = curl_exec($ch);
+      $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+      $error    = curl_error($ch);
+
+      curl_close($ch);
+
+      echo "HTTP code: " . $httpcode . "\n";
+      echo "<pre>";
+      print_r($response);
+      echo "</pre>";
+      echo "Error: " . $error . "\n";
+  }
+
+  public static function deleteWebhook($webhookId)
+  {
+      $moysklad = new Moysklad();
+      $access = $moysklad->getMSLoginPassword();
+
+      $endpoint = "https://api.moysklad.ru/api/remap/1.2/entity/webhook/" . $webhookId;
+
+      $ch = curl_init($endpoint);
+
+      curl_setopt_array($ch, [
+          CURLOPT_RETURNTRANSFER => true,
+          CURLOPT_CUSTOMREQUEST  => "DELETE",
+          CURLOPT_HTTPHEADER     => [
+              "Authorization: Basic " . base64_encode($access->login . ':' . $access->password),
+              "Content-Type: application/json"
+              // Accept-Encoding не указываем вручную
+          ],
+          CURLOPT_ENCODING       => "",
+      ]);
+
+      $response = curl_exec($ch);
+      $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+      $error    = curl_error($ch);
+
+      curl_close($ch);
+
+      echo "HTTP code: " . $httpcode . "\n";
+      echo "<pre>";
+      print_r($response);
+      echo "</pre>";
+      echo "Error: " . $error . "\n";
+  }
+
 }

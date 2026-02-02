@@ -22,9 +22,9 @@ class WoltController extends Controller
         Yii::$app->response->format = Response::FORMAT_JSON;
 
         // только POST
-        if (!Yii::$app->request->isPost) {
-            throw new BadRequestHttpException('POST required');
-        }
+        // if (!Yii::$app->request->isPost) {
+        //     throw new BadRequestHttpException('POST required');
+        // }
 
         // проверка token из GET
         $this->checkToken();
@@ -38,7 +38,6 @@ class WoltController extends Controller
         $dataLog  = __DIR__ . '/../logs/wolt/data.txt';
 
         $raw = Yii::$app->request->rawBody;
-        // $raw = file_get_contents($testFile);
 
         $data = json_decode($raw, true);
 
@@ -69,6 +68,12 @@ class WoltController extends Controller
         $orderId  = (string)($data['order']['id'] ?? '');
         $venueId  = (string)($data['order']['venue_id'] ?? '');
 
+        file_put_contents(
+            $dataLog,
+            date('Y-m-d H:i:s') . " -- EVENT type={$type} status={$status} orderId={$orderId} venueId={$venueId}" . PHP_EOL,
+            FILE_APPEND | LOCK_EX
+        );
+
         if ($type === 'order.notification' && $orderId !== ''){
 
           $wolt         = new \app\services\Wolt();
@@ -92,7 +97,6 @@ class WoltController extends Controller
                       __DIR__ . '/../logs/wolt/order_' . $orderId . '.json',
                       json_encode($order, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)
                   );
-
               }
               catch (\Throwable $e) {
                   file_put_contents(
@@ -104,10 +108,10 @@ class WoltController extends Controller
               }
 
               if($toCreate){
-                $moyskladOrders     = $moysklad->checkOrderInMoySkladByMarketplaceCode($order['id']);
+                $moyskladOrders     = $moysklad->checkOrderInMoySkladByMarketplaceCode($order['order_number'],'externalcode');
 
                 if(!$moyskladOrders){
-                  $projectConfig    = OrdersConfigTable::findOne(['project' => YII::$app->params['moysklad']['woltProject']]);
+                  $projectConfig    = OrdersConfigTable::findOne(['project' => Yii::$app->params['moysklad']['woltProject']]);
                   $moySkladRemains  = $moysklad->getProductsRemains(); // 023870f6-ee91-11ea-0a80-05f20007444d - almaty, 805d5404-3797-11eb-0a80-01b1001ba27a - astana, 1e1187c1-85e6-11ed-0a80-0dbe006f385b - БЦ Success
                   $moySkladRemains  = json_decode($moySkladRemains);
                   $moySkladCities   = $moysklad->getMoySkladCities();
@@ -121,7 +125,7 @@ class WoltController extends Controller
                   $creatingOrder->orderStatus   = $projectConfig->status;
 
                   switch($order['venue']['id']){
-                    case YII::$app->params['wolt']['astana_venue_id']:
+                    case Yii::$app->params['wolt']['astana_venue_id']:
                       $creatingOrder->warehouse = '805d5404-3797-11eb-0a80-01b1001ba27a';
                       $creatingOrder->city      = '4a9f5042-3470-11eb-0a80-056100175606';
                       break;
@@ -133,6 +137,7 @@ class WoltController extends Controller
                   foreach ($order['items'] as $item) {
                     $productInfo            = $item;
                     $productWebSiteData     = $website->getProductWebDataBySku($productInfo['sku']);
+
                     if($productWebSiteData){
                       $productRemainsInStock  = $moysklad->productRemainsCheckByArray($productInfo['sku'],$productInfo['count'],$moySkladRemains,$productWebSiteData->product_id);
 
@@ -159,11 +164,12 @@ class WoltController extends Controller
                       $prObj->quantity  = (int)$productInfo['count'];
                       $prObj->price     = ($productInfo['item_price']['unit_price']['amount']) / 100;
                       $prObj->type      = $productWebSiteData->product_type;
+                      $prObj->vat       = false;
                       $creatingOrder->products[] = $prObj;
                     }
                     else {
                       $addOrderToMoySklad = false;
-                      $telegram->sendTelegramMessage('Ошибка создания заказа Wolt #' . $order['id'] . '. Не найден товар SKU - ' . $productInfo['sku'] . '.', 'wolt');
+                      $telegram->sendTelegramMessage('Ошибка создания заказа Wolt #' . $order['order_number'] . '. Не найден товар SKU - ' . $productInfo['sku'] . '.', 'wolt');
                     }
                   }
 
@@ -184,13 +190,13 @@ class WoltController extends Controller
 
                   $creatingOrder->contragent    = $msContragent->id;
 
-                  $creatingOrder->orderId         = $order['id'];
-                  $creatingOrder->orderExtId      = '';
+                  $creatingOrder->orderId         = $order['order_number'];
+                  $creatingOrder->orderExtId      = $order['id'];
                   if($order['delivery']['time']){
                     $dateTime = new \DateTime($order['delivery']['time'], new \DateTimeZone('UTC'));
                     $dateTime->setTimezone(new \DateTimeZone('Asia/Almaty'));
                     $creatingOrder->deliveryDate    = $dateTime->format('Y-m-d');
-                    $creatingOrder->deliveryTime    = $dateTime->format('H:i:s');
+                    $creatingOrder->deliveryTime    = $moysklad->getDeliveryTime($dateTime,'wolt');
                   }
                   else {
                     $creatingOrder->deliveryDate    = false;
@@ -198,8 +204,8 @@ class WoltController extends Controller
                   }
 
                   if (!empty($order['cash_payment'])) {
-                    $creatingOrder->paymentType     = YII::$app->params['moysklad']['cashPaymentTypeId'];
-                    $creatingOrder->paymentStatus   = YII::$app->params['moysklad']['cashPaymentStatus'];
+                    $creatingOrder->paymentType     = Yii::$app->params['moysklad']['cashPaymentTypeId'];
+                    $creatingOrder->paymentStatus   = Yii::$app->params['moysklad']['cashPaymentStatus'];
                   }
                   else {
                     $creatingOrder->paymentType   = $projectConfig->payment_type;
@@ -211,19 +217,25 @@ class WoltController extends Controller
                   $creatingOrder->cityStr         = '';
                   $creatingOrder->address         = '';
                   $creatingOrder->deliveryCost    = (string)0;
-                  $creatingOrder->deliveryType    = 'c45aea40-54cd-11ec-0a80-095800022a93';
 
-                  if (($order['delivery']['type'] ?? '') !== 'takeaway' && !empty($order['delivery']['location'])) {
-                    $creatingOrder->deliveryType  = $projectConfig->delivery_service;
-                    $creatingOrder->cityStr = (string)($order['delivery']['location']['city'] ?? '');
-                    $creatingOrder->address = (string)($order['delivery']['location']['street_address'] ?? '');
+                  switch($order['delivery']['type']){
+                    case 'takeaway':
+                      $creatingOrder->deliveryType    = 'c45aea40-54cd-11ec-0a80-095800022a93';
+                      break;
+                    default:
+                      $creatingOrder->deliveryType  = $projectConfig->delivery_service;
+                      if(!empty($order['delivery']['location'])){
+                        $creatingOrder->cityStr = (string)($order['delivery']['location']['city'] ?? '');
+                        $creatingOrder->address = (string)($order['delivery']['location']['street_address'] ?? '');
+                      }
                   }
 
                   $creatingOrder->autoorder = true;
 
                   if($addOrderToMoySklad){
                     try {
-                        $msOrder  = $moysklad->createOrder($creatingOrder, 'wolt', $order['id']);
+                        $msOrder = $moysklad->createOrder($creatingOrder, 'wolt', $order['order_number']);
+
                         $imported = $woltimporter->upsertOrder($order);
 
                         if (!empty($msOrder) && (isset($msOrder->id) || isset($msOrder->meta))) {
@@ -231,7 +243,7 @@ class WoltController extends Controller
                             try {
 
                               $venueId = (string)($order['venue']['id'] ?? $order['venue_id'] ?? '');
-                              $isPre   = (($order['type'] ?? '') === 'preorder');
+                              $isPre   = (($order['type'] ?? '') == 'preorder');
 
                               $woltAccept = $isPre
                                   ? $wolt->confirmPreOrder($order['id'], $venueId)
@@ -239,7 +251,7 @@ class WoltController extends Controller
 
                                 file_put_contents(
                                     $dataLog,
-                                    date('Y-m-d H:i:s') . " -- ACCEPT OK order={$order['id']} resp=" . substr(print_r($woltAccept, true), 0, 1000) . PHP_EOL,
+                                    date('Y-m-d H:i:s') . " -- ACCEPT OK order={$order['id']} num={$order['order_number']} resp=" . substr(print_r($woltAccept, true), 0, 1000) . PHP_EOL,
                                     FILE_APPEND | LOCK_EX
                                 );
 
@@ -247,7 +259,7 @@ class WoltController extends Controller
 
                                 file_put_contents(
                                     $errorLog,
-                                    date('Y-m-d H:i:s') . " -- ACCEPT FAIL order={$order['id']} err=" . $e->getMessage() . PHP_EOL,
+                                    date('Y-m-d H:i:s') . " -- ACCEPT FAIL order={$order['id']} num={$order['order_number']} err=" . $e->getMessage() . PHP_EOL,
                                     FILE_APPEND | LOCK_EX
                                 );
                             }
@@ -268,6 +280,7 @@ class WoltController extends Controller
               break;
             // Отмена заказа
             case 'CANCELED':
+              $toCancel = false;
               try {
                   $order = $wolt->getOrder($orderId,$venueId);
 
@@ -290,7 +303,7 @@ class WoltController extends Controller
 
               if($toCancel){
 
-                $moyskladOrders = $moysklad->checkOrderInMoySkladByMarketplaceCode($order['id']);
+                $moyskladOrders = $moysklad->checkOrderInMoySkladByMarketplaceCode($order['order_number'],'externalcode');
 
                 if($moyskladOrders && !empty($moyskladOrders)){
 
@@ -311,20 +324,20 @@ class WoltController extends Controller
                       $isPayed                    = ($paymentStatusId === (Yii::$app->params['moysklad']['cashPaymentStatusPayed'] ?? ''));
 
                       if($isPayed){
-                        if($demandStateId == YII::$app->params['moysklad']['demandUpdateHandler']['stateDemandCollected']){
+                        if($demandStateId == Yii::$app->params['moysklad']['demandUpdateHandler']['stateDemandCollected']){
                           // Статус Собран и чек выбит - меняем на Провести возврат
-                          $demandStateMeta = $moysklad->buildStateMeta('demand', YII::$app->params['moysklad']['demandUpdateHandler']['stateDemandDoReturn']);
+                          $demandStateMeta = $moysklad->buildStateMeta('demand', Yii::$app->params['moysklad']['demandUpdateHandler']['stateDemandDoReturn']);
                           $moysklad->updateDemandState($demand->id,$demandStateMeta);
                         }
                         else {
                           // Другой статус - Чека скорее всего нет. Меняем на БЕЗ ЧЕКА - Возврат на склад
-                          $demandStateMeta = $moysklad->buildStateMeta('demand', YII::$app->params['moysklad']['demandUpdateHandler']['stateDemandReturnNoCheck']);
+                          $demandStateMeta = $moysklad->buildStateMeta('demand', Yii::$app->params['moysklad']['demandUpdateHandler']['stateDemandReturnNoCheck']);
                           $moysklad->updateDemandState($demand->id,$demandStateMeta);
                         }
                       }
                       else {
                         // Статус оплаты - Не оплачен. Меняем на БЕЗ ЧЕКА - Возврат на склад
-                        $demandStateMeta = $moysklad->buildStateMeta('demand', YII::$app->params['moysklad']['demandUpdateHandler']['stateDemandReturnNoCheck']);
+                        $demandStateMeta = $moysklad->buildStateMeta('demand', Yii::$app->params['moysklad']['demandUpdateHandler']['stateDemandReturnNoCheck']);
                         $moysklad->updateDemandState($demand->id,$demandStateMeta);
                       }
                     }

@@ -231,7 +231,7 @@ class WoltOrderImporter
         $row = Yii::$app->db->createCommand("
             SELECT venue_id
             FROM {{%wolt_orders}}
-            WHERE wolt_order_id = :id
+            WHERE order_number = :id
             LIMIT 1
         ", [':id' => $woltOrderId])->queryOne();
 

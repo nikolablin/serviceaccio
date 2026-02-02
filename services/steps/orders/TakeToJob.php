@@ -44,7 +44,6 @@ class TakeToJob extends AbstractStep
       (new V2OrdersRepository())->upsert((string)$order->id, (string)$stateId);
 
 
-
       /* ------------------ Действия при CREATE или UPDATE ---------------- */
 
       // 2) Резолвим конфиг
@@ -69,17 +68,49 @@ class TakeToJob extends AbstractStep
       }
 
       // 3) Собираем изменения (payload только отличий)
-      $diff = $ctx->ms()->buildOrderPatch($order, $config);
+      $diffOrder = $ctx->ms()->buildOrderPatch($order, $config);
 
-      if (empty($diff['payload'])) {
+      // 3.1) Проверяем организацию, чтобы, если что накинуть НДС
+      $vatPatches      = [];
+      $orgId           = $config->organization;
+      $orderVatEnabled = false;
+
+      if ($orgId && $ctx->ms()->checkOrganizationVatEnabled($orgId)) {
+          $vatPercent = (int)(Yii::$app->params['moyskladv2']['vat']['value'] ?? 16);
+          $vatPatches = $ctx->ms()->buildCustomerOrderPositionsVatPatch($order, $vatPercent);
+          $orderVatEnabled = true;
+      }
+
+      $currentOrderVatEnabled = (bool)($order->vatEnabled ?? false);
+
+      if ($currentOrderVatEnabled !== (bool)$orderVatEnabled) {
+          if (empty($diffOrder['payload']) || !is_array($diffOrder['payload'])) {
+              $diffOrder['payload'] = [];
+          }
+
+          $diffOrder['payload']['vatEnabled'] = (bool)$orderVatEnabled;
+          $diffOrder['changed']['vatEnabled'] = [
+              'from' => $currentOrderVatEnabled,
+              'to'   => (bool)$orderVatEnabled,
+          ];
+      }
+
+      if (empty($diffOrder['payload'])) {
           Log::{$log}('TakeToJob: config already applied (no changes)', [ 'orderId' => $order->id ?? null, ]);
       }
       else {
         // 4) Обновляем заказ в МС
-        $resp = $ctx->ms()->request('PUT', "entity/customerorder/{$order->id}", $diff['payload']);
-        Log::{$log}('TakeToJob: MS order updated', [ 'orderId' => $order->id ?? null, 'ok'      => $resp['ok'] ?? false, 'code'    => $resp['code'] ?? null, 'changed' => $diff['changed'] ?? [], ]);
+        $resp = $ctx->ms()->request('PUT', "entity/customerorder/{$order->id}", $diffOrder['payload']);
+        Log::{$log}('TakeToJob: MS order updated', [ 'orderId' => $order->id ?? null, 'ok'      => $resp['ok'] ?? false, 'code'    => $resp['code'] ?? null, 'changed' => $diffOrder['changed'] ?? [], ]);
       }
 
+
+      if (!empty($vatPatches)) {
+          // Обновляем позиции, если у них появился/пропал НДС
+          $vatApply = $ctx->ms()->applyCustomerOrderPositionsVatPatch((string)$order->id, $vatPatches);
+
+          Log::{$log}('TakeToJob: VAT patch applied', [ 'orderId' => $order->id ?? null, 'result'  => $vatApply ]);
+      }
 
 
       /* ------------------ Действия Только при UPDATE --------------- */
@@ -90,10 +121,10 @@ class TakeToJob extends AbstractStep
 
         // Удаляем документы этого заказа, reset всего заказа
         $deleteEntities = [
-            'demand'      => 'customerOrder',
             'paymentin'   => 'customerOrder',
             'cashin'      => 'customerOrder',
             'invoiceout'  => 'customerOrder',
+            'demand'      => 'customerOrder',
         ];
 
         // Если у заказа есть отгрузка

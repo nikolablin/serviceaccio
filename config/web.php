@@ -89,6 +89,18 @@ $config = [
                         return date('Y-m-d H:i:s');
                     },
                 ],
+
+                // 3) обновление возвратов
+                [
+                    'class' => yii\log\FileTarget::class,
+                    'levels' => ['info', 'warning', 'error'],
+                    'categories' => ['salesreturn.update'],
+                    'logFile' => '@runtime/logs/salesreturn_update.log',
+                    'logVars' => [],
+                    'prefix' => function () {
+                        return date('Y-m-d H:i:s');
+                    },
+                ],
             ],
         ],
 

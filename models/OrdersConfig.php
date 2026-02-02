@@ -141,12 +141,16 @@ class OrdersConfig extends Model
         // ---------- STORE: ОДНА форма, несколько configs[action_type][...] ----------
         if ($mid === $storeProjectId) {
             $sections = [
-                0 => '0. Вручную - Наличными',
-                1 => '1. Вручную - Kaspi QR',
-                2 => '2. Вручную - Банковской картой',
-                3 => '3. Вручную - Forte Online Payment',
-                4 => '4. Сайт - Forte Online Payment',
-                5 => '5. Сайт - Kaspi QR',
+                0 => 'Вручную - Наличными',
+                1 => 'Вручную - Kaspi QR',
+                7 => 'Вручную - Kaspi Link',
+                8 => 'Вручную - Halyk QR',
+                9 => 'Вручную - Halyk Link',
+                2 => 'Вручную - Банковской картой',
+                3 => 'Вручную - Forte Online Payment',
+                4 => 'Сайт - Forte Online Payment',
+                5 => 'Сайт - Kaspi QR',
+                6 => 'Сайт - Halyk QR',
             ];
 
             $form  = '<form name="order-config">';
@@ -188,10 +192,13 @@ class OrdersConfig extends Model
         // ---------- ♥️ ACCIO STORE: ОДНА форма, несколько configs[action_type][...] ----------
         if ($mid === $accioStoreProjectId) {
             $sections = [
-                0 => '0. Вручную - Kaspi Link',
-                1 => '1. Вручную - 🟣 Forte Online Payment',
-                2 => '2. Сайт - 🟣 Forte Online Payment',
-                3 => '3. Сайт - Kaspi QR',
+                0 => 'Вручную - Kaspi Link',
+                1 => 'Вручную - 🟣 Forte Online Payment',
+                5 => 'Вручную - Halyk Link',
+                2 => 'Сайт - 🟣 Forte Online Payment',
+                3 => 'Сайт - Kaspi QR',
+                4 => 'Сайт - Halyk QR',
+                4 => 'Сайт - Kaspi Link',
             ];
 
             $form  = '<form name="order-config">';
@@ -287,7 +294,7 @@ class OrdersConfig extends Model
         $fiscalYesId = 'c3c0ee4f-a4e7-11eb-0a80-075b00176e05';
         $fiscalNoId  = 'c919fb37-a4e7-11eb-0a80-00dd00166ffd';
 
-        $html  = '<section class="project-type-el">';
+        $html  = '<section class="project-type-el border-bottom">';
         $html .= '<h3>' . self::e($title) . '</h3>';
 
         $html .= '

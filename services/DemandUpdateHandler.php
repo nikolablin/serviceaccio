@@ -41,7 +41,7 @@ class DemandUpdateHandler
             '1123' . print_r($event,true),
             FILE_APPEND
         );
- 
+
         // Принудительно торможу на 2 секунды, чтобы второй вебхук не шарахнул по первому
         sleep(2);
 
@@ -279,15 +279,17 @@ class DemandUpdateHandler
                 if($msOrder->project->id == Yii::$app->params['moysklad']['woltProject']){
                   $woltOrderNum = $moysklad->getProductAttribute($msOrder->attributes,'a7f0812d-a0a3-11ed-0a80-114f003fc7f9');
                   $woltOrderNum = (!$woltOrderNum) ? false : $woltOrderNum->value;
+                  $woltOrderExtNum = $moysklad->getProductAttribute($msOrder->attributes,'11dc767c-52d6-11ee-0a80-0f3d00080bcb');
+                  $woltOrderExtNum = (!$woltOrderExtNum) ? false : $woltOrderExtNum->value;
 
-                  if ($woltOrderNum) {
-                      $venueId = $woltimporter->getVenueIdByOrderId($woltOrderNum);
+                  if ($woltOrderExtNum) {
+                      $venueId = $woltimporter->getVenueIdByOrderId($woltOrderExtNum);
 
                       if ($venueId) {
-                          $resp = $wolt->markOrderReady($woltOrderNum, $venueId);
+                          $resp = $wolt->markOrderReady($woltOrderExtNum, $venueId);
                       } else {
                         file_put_contents(__DIR__ . '/../logs/ms_service/updatedemand.txt',
-                            "ORDER WOLT SET VENUE ID ERROR {$woltOrderNum}\n",
+                            "ORDER WOLT SET VENUE ID ERROR {$woltOrderExtNum} {$woltOrderNum}\n",
                             FILE_APPEND
                         );
                       }

@@ -50,8 +50,6 @@ class Assembled extends AbstractStep
 
         Log::demandUpdate('Assembled: fiscal needed', [ 'value' => $needFiscal ]);
 
-$needFiscal = true;
-
         $createReceipt = false;
 
         // Фискальный чек требуется, собираем чек
@@ -109,10 +107,10 @@ $needFiscal = true;
             ];
           }
 
-          $customerReceipt = [
-            'name' => $demand->agent->name,
-            'phone' => $demand->agent->phone
-          ];
+          // $customerReceipt = [
+          //   'name' => $demand->agent->name,
+          //   'phone' => $demand->agent->phone
+          // ];
 
           // Данные чека
           $dataReceipt = [
@@ -126,7 +124,7 @@ $needFiscal = true;
               'items'        => $items,
               'total_amount' => $totalSum,
               'as_html'      => false,
-              'customer'     => $customerReceipt
+              // 'customer'     => $customerReceipt
           ];
 
           // Собираем Draft в локальную БД
@@ -145,7 +143,7 @@ $needFiscal = true;
                                           $dataReceipt
                                       );
 
-          $createReceipt = CashRegisterV2::sendByIdGuarded($receiptId, true);
+          $createReceipt = CashRegisterV2::sendByIdGuarded($receiptId, false);
 
           if($createReceipt['ok']){
             if(!isset($createReceipt['skipped']) || $createReceipt['skipped'] === false){
@@ -190,7 +188,7 @@ $needFiscal = true;
         if($projectId == Yii::$app->params['moyskladv2']['woltProject']){
           $woltOrderNum  = (string)($ctx->ms()->getAttributeValue( $demand, Yii::$app->params['moyskladv2']['demands']['attributesFields']['marketPlaceNum'] ) ?: '-');
 
-          if ($woltOrderNum) {
+          if ($woltOrderNum) { 
               $venueId = $woltimporter->getVenueIdByOrderId($woltOrderNum);
 
               if ($venueId) {

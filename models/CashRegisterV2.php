@@ -121,9 +121,11 @@ class CashRegisterV2 extends Model
           return 0;
         }
 
+        $operation = (string)($meta['operation'] ?? 'sell');
+
         $now = date('Y-m-d H:i:s');
 
-        $row = V2Receipts::find()->where(['demand_ms_id' => $demandMsId])->one();
+        $row = V2Receipts::find()->where(['demand_ms_id' => $demandMsId, 'operation' => $operation])->one();
         if (!$row) {
             $row = new V2Receipts();
             $row->demand_ms_id = $demandMsId;
@@ -150,10 +152,25 @@ class CashRegisterV2 extends Model
         if ($total > 0) $row->total_amount = $total;
 
         // payload
-        $row->payload_json  = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        if ($row->payload_json === false) {
-            Log::cashboxError( 'upsertDraft: json_encode failed: ' . json_last_error_msg() );
+        $newPayloadJson = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($newPayloadJson === false) {
+            Log::cashboxError('upsertDraft: json_encode failed: ' . json_last_error_msg());
             return 0;
+        }
+
+        $oldPayloadJson = (string)($row->payload_json ?? '');
+        $payloadChanged = ($oldPayloadJson !== '' && $oldPayloadJson !== $newPayloadJson);
+
+        $row->payload_json = $newPayloadJson;
+
+        if ($payloadChanged && !in_array($row->status, ['sent','sending'], true)) {
+            // ключ должен соответствовать конкретному payload
+            $row->idempotency_key = self::uuidV4();
+            $row->attempts = 0;
+            $row->status = 'prepared';
+            $row->error_message = null;
+            $row->response_json = null;
+            $row->external_id = null; // если поле есть в таблице
         }
 
         // если до этого был error — при новом draft возвращаем в prepared

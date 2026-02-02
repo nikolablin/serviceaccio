@@ -3,13 +3,18 @@
 // use app\models\Kaspi;
 // use app\models\Whatsapp;
 // use app\models\Moysklad;
+// use app\models\MoyskladWebhook;
 //
 //
 // ini_set('display_errors', '1');
 // error_reporting(E_ALL);
 //
 // $moysklad = new Moysklad();
-//
+// $moysklad = new MoyskladWebhook();
+
+// $moysklad->disableWebhook('fe487bd0-a40f-11ee-0a80-0411002fa50b');
+// $moysklad->createWebhook('https://service.accio.kz/webhook/updatesalesreturn','UPDATE','salesreturn');
+
 // $orderHref = 'https://api.moysklad.ru/api/remap/1.2/entity/customerorder/110416e9-ee35-11f0-0a80-17c801ead99d';
 //
 // $order = $moysklad->getHrefData(

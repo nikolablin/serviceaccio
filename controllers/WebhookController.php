@@ -8,10 +8,15 @@ use yii\web\ForbiddenHttpException;
 use yii\filters\VerbFilter;
 use app\models\Moysklad;
 use app\services\MoyskladWebhookService;
+use app\services\handlers\CustomerOrderCreateHandlerV2;
+use app\services\handlers\CustomerOrderUpdateHandlerV2;
+use app\services\handlers\DemandUpdateHandlerV2;
+use app\services\handlers\SalesreturnUpdateHandlerV2;
 
 class WebhookController extends Controller
 {
     // Для вебхуков обычно отключают CSRF
+
     public $enableCsrfValidation = false;
 
     private function respondOkAndClose(): void
@@ -56,9 +61,8 @@ class WebhookController extends Controller
                     'index' => ['post'],
                     'createcustomerorder' => ['post'],
                     'updatecustomerorder' => ['post'],
-                    'updatedemand' => ['get','post'],
-                    'createsalesreturn' => ['post'],
-                    'updatesalesreturn' => ['post'],
+                    'updatedemand'        => ['get','post'],
+                    'updatesalesreturn'   => ['post'],
                 ],
             ],
         ];
@@ -103,65 +107,66 @@ class WebhookController extends Controller
 
     private function handleWebhook(string $logFile): string
     {
-      $raw = file_get_contents('php://input');
-// $raw = '{"auditContext":{"meta":{"type":"audit","href":"https://api.moysklad.ru/api/remap/1.2/audit/55bec62c-f82f-11f0-0a80-0b3c0006165d"},"uid":"online@2336623","moment":"2026-01-23 10:44:23"},"events":[{"meta":{"type":"customerorder","href":"https://api.moysklad.ru/api/remap/1.2/entity/customerorder/4081cebb-f82b-11f0-0a80-0472000f6157"},"updatedFields":["state"],"action":"UPDATE","accountId":"021a4ccc-ee91-11ea-0a80-09f000002b18"}]}';
+        $raw = file_get_contents('php://input');
+        file_put_contents($logFile, $raw . PHP_EOL, FILE_APPEND);
 
-      // лог — быстро (но лучше без giant print_r)
-      file_put_contents($logFile, $raw . PHP_EOL, FILE_APPEND);
+        // ✅ ответ сразу
+        $this->respondOkAndClose();
 
-      // ✅ СНАЧАЛА ответ МойСкладу (в 1500ms успеет всегда)
-      $this->respondOkAndClose();
+        $payload = json_decode($raw);
+        if (!$payload) {
+            file_put_contents($logFile, "WARN: bad json\n", FILE_APPEND);
+            return '';
+        }
 
-      // дальше — тяжёлая логика уже после закрытия соединения
-      $payload = json_decode($raw);
-      if (!$payload || empty($payload->events)) {
-          return ''; // ответ уже отправлен
-      }
+        // ✅ вот тут “тестовая логика”, но для реальных вебхуков
+        $this->handleMsV2Payload($payload, $logFile);
 
-
-      try {
-          (new \app\services\MoyskladWebhookService())->handle($payload);
-      } catch (\Throwable $e) {
-          file_put_contents(
-              $logFile,
-              "ERROR: {$e->getMessage()}\n{$e->getTraceAsString()}\n",
-              FILE_APPEND
-          );
-      }
-
-      return ''; // ответ уже отправлен
+        return '';
     }
 
-
-
-
-    public function actionTestMsV2()
+    private function handleMsV2Payload(object $payload, string $logFile): void
     {
-        $this->layout = false;
-        \Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
-
-        $json = \Yii::$app->request->post('json');
-        if (!$json) {
-            // можно и в коде хранить дефолт
-            // $json = '{"events":[{"meta":{"type":"demand","href":"https://api.moysklad.ru/api/remap/1.2/entity/demand/cc2ad48f-f82e-11f0-0a80-19e00006480e"},"action":"UPDATE","accountId":"021a4ccc-ee91-11ea-0a80-09f000002b18"}]}';
-            $json = '{"events":[{"meta":{"type":"demand","href":"https://api.moysklad.ru/api/remap/1.2/entity/demand/7f6f5f31-f543-11f0-0a80-1474007f29b9"},"action":"UPDATE","accountId":"021a4ccc-ee91-11ea-0a80-09f000002b18"}]}';
+        if (empty($payload->events) || !is_array($payload->events)) {
+            file_put_contents($logFile, "WARN: empty events\n", FILE_APPEND);
+            return;
         }
 
-        $payload = json_decode($json);
-        if (!$payload || empty($payload->events)) {
-            return ['ok' => false, 'error' => 'bad json'];
+        foreach ($payload->events as $event) {
+            $type   = $event->meta->type ?? null;
+            $action = $event->action ?? null;
+
+            try {
+                // ВАЖНО: тут роутинг на нужный handler (пример)
+                switch ($type) {
+                    case 'customerorder':
+                        $action = strtoupper((string)($event->action ?? ''));
+                        if ($action === 'CREATE') {
+                            (new CustomerOrderCreateHandlerV2())->handle($event);
+                        }
+                        elseif ($action === 'UPDATE') {
+                            (new CustomerOrderUpdateHandlerV2())->handle($event);
+                        }
+                        break;
+                    case 'demand':
+                        (new DemandUpdateHandlerV2())->handle($event);
+                        break;
+                    case 'salesreturn':
+                        (new SalesreturnUpdateHandlerV2())->handle($event);
+                        break;
+                    default:
+                        file_put_contents($logFile, "SKIP: unknown type={$type}\n", FILE_APPEND);
+                        break;
+                }
+            } catch (\Throwable $e) {
+                file_put_contents(
+                    $logFile,
+                    "ERROR: type={$type} action={$action} msg={$e->getMessage()}\n{$e->getTraceAsString()}\n",
+                    FILE_APPEND
+                );
+            }
         }
-
-        // берём первый event
-        $event = $payload->events[0];
-
-        // вызов нужного handler-а (V2)
-        $handler = new \app\services\handlers\DemandUpdateHandlerV2();
-        $handler->handle($event);
-
-        return ['ok' => true, 'handled' => true, 'type' => $event->meta->type ?? null, 'action' => $event->action ?? null];
     }
-
 
 
     /* Вебхуки Мойсклад */
@@ -173,34 +178,10 @@ class WebhookController extends Controller
       );
     }
 
-    public function actionCreatesalesreturn()
-    {
-      return $this->handleWebhook(
-          __DIR__ . '/../logs/ms_service/createsalesreturn.txt'
-      );
-    }
-
-    public function actionCreatedemand()
-    {
-      return 'ok';
-      $data1 = file_get_contents('php://input');
-      $data2 = $_POST;
-      file_put_contents(__DIR__ . '/createdemand.txt',print_r($data1,true) . PHP_EOL,FILE_APPEND);
-      file_put_contents(__DIR__ . '/createdemand.txt',print_r($data2,true) . PHP_EOL . PHP_EOL,FILE_APPEND);
-      return $this->render('createdemand');
-    }
-
     public function actionUpdatecustomerorder() // Обновление заказа / Отгрузки / Позиций
     {
       return $this->handleWebhook(
           __DIR__ . '/../logs/ms_service/updatecustomerorder.txt'
-      );
-    }
-
-    public function actionUpdatesalesreturn()
-    {
-      return $this->handleWebhook(
-          __DIR__ . '/../logs/ms_service/updatesalesreturn.txt'
       );
     }
 
@@ -211,26 +192,44 @@ class WebhookController extends Controller
       );
     }
 
-    public function actionDeletecustomerorder()
+    public function actionUpdatesalesreturn() // Обновление возврата
     {
-      return 'ok';
-      $data1 = file_get_contents('php://input');
-      $data2 = $_POST;
-      file_put_contents(__DIR__ . '/deletecustomerorder.txt',print_r($data1,true) . PHP_EOL,FILE_APPEND);
-      file_put_contents(__DIR__ . '/deletecustomerorder.txt',print_r($data2,true) . PHP_EOL . PHP_EOL,FILE_APPEND);
-      return $this->render('deletecustomerorder');
-    }
-
-    public function actionDeletedemand()
-    {
-      return 'ok';
-      $data1 = file_get_contents('php://input');
-      $data2 = $_POST;
-      file_put_contents(__DIR__ . '/deletedemand.txt',print_r($data1,true) . PHP_EOL,FILE_APPEND);
-      file_put_contents(__DIR__ . '/deletedemand.txt',print_r($data2,true) . PHP_EOL . PHP_EOL,FILE_APPEND);
-      return $this->render('deletedemand');
+      return $this->handleWebhook(
+          __DIR__ . '/../logs/ms_service/salesreturn.txt'
+      );
     }
 
     /* EOF Вебхуки Мойсклад */
 
+
+    /* Тестовые экшены */
+
+    // public function actionTestMsV2()
+    // {
+    //     $this->layout = false;
+    //     \Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
+    //
+    //     $json = \Yii::$app->request->post('json');
+    //     if (!$json) {
+    //         // можно и в коде хранить дефолт
+    //         // $json = '{"events":[{"meta":{"type":"customerorder","href":"https://api.moysklad.ru/api/remap/1.2/entity/customerorder/ceae17f1-f560-11f0-0a80-045f000094d7"},"action":"UPDATE","accountId":"021a4ccc-ee91-11ea-0a80-09f000002b18"}]}';
+    //         // $json = '{"events":[{"meta":{"type":"demand","href":"https://api.moysklad.ru/api/remap/1.2/entity/demand/7f6f5f31-f543-11f0-0a80-1474007f29b9"},"action":"UPDATE","accountId":"021a4ccc-ee91-11ea-0a80-09f000002b18"}]}';
+    //     }
+    //
+    //     $payload = json_decode($json);
+    //     if (!$payload || empty($payload->events)) {
+    //         return ['ok' => false, 'error' => 'bad json'];
+    //     }
+    //
+    //     // берём первый event
+    //     $event = $payload->events[0];
+    //
+    //     // вызов нужного handler-а (V2)
+    //     $handler = new \app\services\handlers\DemandUpdateHandlerV2();
+    //     $handler->handle($event);
+    //
+    //     return ['ok' => true, 'handled' => true, 'type' => $event->meta->type ?? null, 'action' => $event->action ?? null];
+    // }
+
+    /* EOF Тестовые экшены */
 }

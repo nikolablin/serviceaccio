@@ -129,6 +129,7 @@ class Wolt
         $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
+
         if ($body === false) {
             Yii::error(['event' => 'wolt_curl_error', 'url' => $url, 'err' => $err], 'wolt');
             throw new \RuntimeException('Wolt curl error: ' . $err);

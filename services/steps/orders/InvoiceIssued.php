@@ -16,7 +16,7 @@ class InvoiceIssued extends AbstractStep
     {
         return false;
     }
- 
+
     protected function process(Context $ctx): void
     {
 
@@ -64,15 +64,53 @@ class InvoiceIssued extends AbstractStep
         // 3) Собираем изменения (payload только отличий)
         $diff = $ctx->ms()->buildOrderPatch($order, $config);
 
+        $vatPatches      = [];
+        $orgId           = $config->organization;
+        $orderVatEnabled = false;
+
+        if ($orgId && $ctx->ms()->checkOrganizationVatEnabled($orgId)) {
+            $vatPercent = (int)(Yii::$app->params['moyskladv2']['vat']['value'] ?? 16);
+            $vatPatches = $ctx->ms()->buildCustomerOrderPositionsVatPatch($order, $vatPercent);
+            $orderVatEnabled = true;
+        }
+
+        $currentOrderVatEnabled = (bool)($order->vatEnabled ?? false);
+
+        // if ($currentOrderVatEnabled !== (bool)$orderVatEnabled) {
+            if (empty($diff['payload']) || !is_array($diff['payload'])) {
+                $diff['payload'] = [];
+            }
+
+            $diff['payload']['vatEnabled'] = (bool)$orderVatEnabled;
+            $diff['changed']['vatEnabled'] = [
+                'from' => $currentOrderVatEnabled,
+                'to'   => (bool)$orderVatEnabled,
+            ];
+
+            Log::{$log}("InvoiceIssued: vat enabled");
+        // }
+
+        $resetOrder = false;
+
         if (empty($diff['payload'])) {
             Log::{$log}('InvoiceIssued: config already applied (no changes)', [ 'orderId' => $order->id ?? null, ]);
         }
         else {
-          // 4) Обновляем заказ в МС
           $resp = $ctx->ms()->request('PUT', "entity/customerorder/{$order->id}", $diff['payload']);
+          $resetOrder = true;
           Log::{$log}('InvoiceIssued: MS order updated', [ 'orderId' => $order->id ?? null, 'ok'      => $resp['ok'] ?? false, 'code'    => $resp['code'] ?? null, 'changed' => $diff['changed'] ?? [], ]);
         }
 
+        if (!empty($vatPatches)) {
+          $vatApply = $ctx->ms()->applyCustomerOrderPositionsVatPatch((string)$order->id, $vatPatches);
+          $resetOrder = true;
+          Log::{$log}('InvoiceIssued: VAT patch applied', [ 'orderId' => $order->id ?? null, 'result'  => $vatApply ]);
+        }
+
+
+        if($resetOrder){
+          $order = $ctx->ms()->getCustomerOrder((string)$order->id);
+        }
 
         /* ------------------ Действия при CREATE или UPDATE ---------------- */
         /* При данном статусе должны быть созданы:
@@ -202,7 +240,6 @@ class InvoiceIssued extends AbstractStep
 
           Log::{$log}('InvoiceIssued: demand created', [ 'orderId'  => $order->id, 'demandId' => (string)$createdDemand->id, ]);
         }
-
 
         // -------------- Входящий платеж ------------------
 

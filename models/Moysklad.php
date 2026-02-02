@@ -1839,11 +1839,18 @@ class Moysklad extends Model
       return $created;
   }
 
-  public function checkOrderInMoySkladByMarketplaceCode($orderCode)
+  public function checkOrderInMoySkladByMarketplaceCode($orderCode, $search = 'code')
   {
     $accessdata = self::getMSLoginPassword();
+
+    $attr = 'a7f0812d-a0a3-11ed-0a80-114f003fc7f9';
+
+    if($search == 'externalcode'){
+      $attr = '11dc767c-52d6-11ee-0a80-0f3d00080bcb';
+    }
+
     $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL,"https://api.moysklad.ru/api/remap/1.2/entity/customerorder?filter=https://api.moysklad.ru/api/remap/1.2/entity/customerorder/metadata/attributes/a7f0812d-a0a3-11ed-0a80-114f003fc7f9=" . $orderCode);
+    curl_setopt($ch, CURLOPT_URL,"https://api.moysklad.ru/api/remap/1.2/entity/customerorder?filter=https://api.moysklad.ru/api/remap/1.2/entity/customerorder/metadata/attributes/' . $attr . '=" . $orderCode);
     curl_setopt($ch, CURLOPT_HTTPHEADER, array(
                                           'Authorization: Basic ' . base64_encode($accessdata->login . ':' . $accessdata->password),
                                           'Connection: Keep-Alive',
@@ -1967,13 +1974,8 @@ class Moysklad extends Model
     return $response;
   }
 
-  public function getDeliveryTime($order)
+  public function getDeliveryTime($date,$type)
   {
-    $deliveryDateTimeMillisec = $order->attributes->plannedDeliveryDate;
-    $seconds = $deliveryDateTimeMillisec / 1000;
-    $deliveryDateTime = date("Y-m-d H:i:s", strtotime('@' . $seconds));
-    $deliveryDateTime = new \DateTime($deliveryDateTime);
-
     $moySkladTiming = [
                         (object)array(
                           'timeFrom' => '10:00:00',
@@ -2009,13 +2011,39 @@ class Moysklad extends Model
                           'msid' => '579af8f2-458b-11ee-0a80-005d005b0931',
                         )
                       ];
-    foreach ($moySkladTiming as $mst) {
-      $mstFromMillisec = strtotime($deliveryDateTime->format('Y-m-d') . ' ' . $mst->timeFrom) * 1000;
-      $mstToMillisec = strtotime($deliveryDateTime->format('Y-m-d') . ' ' . $mst->timeTo) * 1000;
 
-      if($deliveryDateTimeMillisec >= $mstFromMillisec AND $deliveryDateTimeMillisec <= $mstToMillisec){
-        return $mst->msid;
-      }
+
+    switch($type){
+      case 'kaspi':
+        $deliveryDateTimeMillisec = $date;
+        $seconds = $deliveryDateTimeMillisec / 1000;
+        $deliveryDateTime = date("Y-m-d H:i:s", strtotime('@' . $seconds));
+        $deliveryDateTime = new \DateTime($deliveryDateTime);
+
+        foreach ($moySkladTiming as $mst) {
+          $mstFromMillisec = strtotime($deliveryDateTime->format('Y-m-d') . ' ' . $mst->timeFrom) * 1000;
+          $mstToMillisec = strtotime($deliveryDateTime->format('Y-m-d') . ' ' . $mst->timeTo) * 1000;
+
+          if($deliveryDateTimeMillisec >= $mstFromMillisec AND $deliveryDateTimeMillisec <= $mstToMillisec){
+            return $mst->msid;
+          }
+        }
+        break;
+      case 'wolt':
+        $deliveryDateTimeMillisec = $date;
+        $seconds = $date->getTimestamp() * 1000;
+        $deliveryDateTime = $date;
+
+        foreach ($moySkladTiming as $mst) {
+          $mstFromMillisec = strtotime($date->format('Y-m-d') . ' ' . $mst->timeFrom) * 1000;
+          $mstToMillisec = strtotime($date->format('Y-m-d') . ' ' . $mst->timeTo) * 1000;
+
+          if($seconds >= $mstFromMillisec AND $seconds <= $mstToMillisec){
+            return $mst->msid;
+          }
+        }
+
+        break;
     }
 
     return false;
@@ -2096,6 +2124,10 @@ class Moysklad extends Model
       $pr = (object)array();
       $pr->quantity                     = (int)$product->quantity;
       $pr->price                        = (float)$product->price * 100;
+      if($product->vat){
+        $pr->vat                        = (int)$product->vat;
+        $pr->vatEnabled                 = true;
+      }
       $pr->assortment                   = (object)array();
       $pr->assortment->meta             = (object)array();
       $pr->assortment->meta->href       = 'https://api.moysklad.ru/api/remap/1.2/entity/' . $product->type . '/' . $product->pid;
@@ -2137,8 +2169,8 @@ class Moysklad extends Model
     $attributeKaspiDeliveryCost->value = $order->deliveryCost;
     array_push($data->attributes,$attributeKaspiDeliveryCost);
 
-    if($area == 'kaspi'){
-      // External ID of Kaspi order
+    if($area == 'kaspi' || $area == 'wolt'){
+      // External ID of Kaspi|Wolt order
       $attributeExternalIdKaspi = (object)array();
       $attributeExternalIdKaspi->meta = (object)array();
       $attributeExternalIdKaspi->meta->href = 'https://api.moysklad.ru/api/remap/1.2/entity/customerorder/metadata/attributes/11dc767c-52d6-11ee-0a80-0f3d00080bcb';
@@ -2246,6 +2278,8 @@ class Moysklad extends Model
 
     $accessdata = self::getMSLoginPassword();
 
+    file_put_contents(__DIR__ . '/../logs/ms_service/createOrderMoysklad.txt', date('Y-m-d H:i') . PHP_EOL . print_r($data,true) . PHP_EOL . PHP_EOL,FILE_APPEND);
+
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL,"https://api.moysklad.ru/api/remap/1.2/entity/customerorder");
     curl_setopt($ch, CURLOPT_POST, 1);
@@ -2263,6 +2297,8 @@ class Moysklad extends Model
     curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
     $server_output = json_decode(curl_exec ($ch));
     curl_close ($ch);
+
+    file_put_contents(__DIR__ . '/../logs/ms_service/createOrderMoysklad.txt', print_r($server_output,true) . PHP_EOL . PHP_EOL,FILE_APPEND);
 
     return $server_output;
   }
@@ -2842,7 +2878,7 @@ class Moysklad extends Model
   {
       foreach (($entity->attributes ?? []) as $attr) {
           // у тебя resolver проверяет ($attr->id === $attrId)
-          if (($attr->id ?? null) !== $attrId) continue; 
+          if (($attr->id ?? null) !== $attrId) continue;
 
           $href = $attr->value->meta->href ?? null;
           return $href ? basename($href) : null;

@@ -1,6 +1,7 @@
 <?php
 namespace app\services\handlers;
 
+use Yii;
 use app\services\support\Context;
 use app\services\support\StepRouter;
 use app\services\support\Log;
@@ -25,34 +26,46 @@ class CustomerOrderUpdateHandlerV2
             return;
         }
 
-        $ctx = new Context($event);
+        $orderId = basename((string)($event->meta->href ?? ''));
+        if ($orderId === '') return;
 
-        $order = $ctx->getOrder();
-
-        if (!$order) {
-          Log::orderUpdate('UPDATE: cannot load order by href', [
-              'href' => $event->meta->href ?? null,
-          ]);
-          return;
-        }
-
-        $stateId = $this->extractStateId($order);
-
-        if (!$stateId) {
+        if (!$this->acquireOrderLock($orderId, 180)) {
+            Log::orderUpdate('UPDATE: skipped by cache lock', ['orderId' => $orderId]);
             return;
         }
 
-        $step = $this->router->resolve($stateId);
 
-        if (!$step) {
-           Log::orderUpdate('UPDATE: no step for state', [
-               'orderId' => $order->id ?? null,
-               'stateId' => $stateId,
-           ]);
-           return;
+        try {
+            $ctx   = new Context($event);
+            $order = $ctx->getOrder();
+
+            if (!$order) {
+                Log::orderUpdate('UPDATE: cannot load order by href', ['href' => $event->meta->href ?? null]);
+                return;
+            }
+
+            $stateId = $this->extractStateId($order);
+            if (!$stateId) return;
+
+            $step = $this->router->resolve($stateId);
+            if (!$step) {
+                Log::orderUpdate('UPDATE: no step for state', [
+                    'orderId' => $order->id ?? null,
+                    'stateId' => $stateId,
+                ]);
+                return;
+            }
+
+            $step->run($ctx);
+
+        } catch (\Throwable $e) {
+            Log::orderUpdate('UPDATE: exception', [
+                'orderId' => $orderId,
+                'err'     => $e->getMessage(),
+            ]);
+        } finally {
+            $this->releaseOrderLock($orderId);
         }
-
-        $step->run($ctx);
     }
 
     private function extractStateId(object $order): ?string
@@ -60,5 +73,23 @@ class CustomerOrderUpdateHandlerV2
       $href = $order->state->meta->href ?? null;
       if (!$href || !is_string($href)) return null;
       return basename($href);
+    }
+
+    private function lockKey(string $orderId): string
+    {
+        // ✅ общий ключ для CREATE + UPDATE
+        return 'ms_lock_customerorder_' . $orderId;
+    }
+
+    private function acquireOrderLock(string $orderId, int $ttlSeconds = 60): bool
+    {
+        if (!isset(Yii::$app->cache)) return true;
+        return Yii::$app->cache->add($this->lockKey($orderId), 1, $ttlSeconds);
+    }
+
+    private function releaseOrderLock(string $orderId): void
+    {
+        if (!isset(Yii::$app->cache)) return;
+        Yii::$app->cache->delete($this->lockKey($orderId));
     }
 }

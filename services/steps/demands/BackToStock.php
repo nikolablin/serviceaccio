@@ -20,7 +20,6 @@ class BackToStock extends AbstractStep
 
     protected function process(Context $ctx): void
     {
-
         $demand = $ctx->getDemand();
         if (!$demand || empty($demand->id)) {
             Log::demandUpdate('BackToStock: demand not loaded', [ 'href' => $ctx->event->meta->href ?? null, ]);
@@ -46,10 +45,6 @@ class BackToStock extends AbstractStep
         $needFiscal = ($fiscalVal && $fiscalVal === Yii::$app->params['moyskladv2']['demands']['attributesFieldsValues']['fiscalYes']) ? true : false;
 
         Log::demandUpdate('BackToStock: fiscal needed', [ 'value' => $needFiscal ]);
-
-$needFiscal = true;
-
-        $createReceipt = false;
 
         // Фискальный чек требуется, собираем чек
         if($needFiscal):
@@ -105,10 +100,10 @@ $needFiscal = true;
             ];
           }
 
-          $customerReceipt = [
-            'name' => $demand->agent->name ?? '',
-            'phone' => $demand->agent->phone ?? '',
-          ];
+          // $customerReceipt = [
+          //   'name' => $demand->agent->name ?? '',
+          //   'phone' => $demand->agent->phone ?? '',
+          // ];
 
           $dataReceipt = [
               'operation'    => Yii::$app->params['ukassa']['operationTypeReturn'],
@@ -121,7 +116,7 @@ $needFiscal = true;
               'items'        => $items,
               'total_amount' => $totalSum,
               'as_html'      => false,
-              'customer'     => $customerReceipt
+              // 'customer'     => $customerReceipt
           ];
 
           $receiptId = CashRegisterV2::upsertDraft(
@@ -137,8 +132,8 @@ $needFiscal = true;
                                               'total_amount'  => $totalSum,
                                           ],
                                           $dataReceipt
-                                      );
-          $createReceipt = CashRegisterV2::sendByIdGuarded($receiptId, true);
+                                    );
+          $createReceipt = CashRegisterV2::sendByIdGuarded($receiptId, false);
 
           if($createReceipt['ok']){
             if(!isset($createReceipt['skipped']) || $createReceipt['skipped'] === false){

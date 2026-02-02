@@ -1,11 +1,11 @@
 {
-  "id": "6967e55ad6d9322e80941aa9",
-  "type": "order.notification",
-  "created_at": "2026-01-14T18:50:02.879Z",
-  "order": {
-    "id": "6967e49f654ed3a8c7cb6960",
-    "venue_id": "69671b2c02c47b76dea13d6b",
-    "status": "CANCELED",
-    "resource_url": "https://pos-integration-service.development.dev.woltapi.com/orders/6967e49f654ed3a8c7cb6960"
-  }
+    "id": "69773925af40e92c0c7de670",
+    "type": "order.notification",
+    "order": {
+        "id": "6977390268216498343b7a78",
+        "venue_id": "6141dc39feba5992a4d2e1d5",
+        "status": "CREATED",
+        "resource_url": "https:\/\/pos-integration-service.wolt.com\/orders\/6977390268216498343b7a78"
+    },
+    "created_at": "2026-01-26T09:51:33.676Z"
 }

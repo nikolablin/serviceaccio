@@ -36,7 +36,6 @@ class OrdersConfigResolverV2
         $paymentTypeId = $paymentAttrId ? $ms->getAttributeValue($order, (string)$paymentAttrId) : null;
         $channelId     = $channelAttrId ? $ms->getAttributeValue($order, (string)$channelAttrId) : null;
 
-
         // 3) Определяем "сайт" / "не сайт"
         $channelIsWebsite = Yii::$app->params['moyskladv2']['staticReferenceValues']['channelIsWebsite'] ?? null;
 
@@ -55,6 +54,7 @@ class OrdersConfigResolverV2
             $configs = array_values(array_filter($configs, static function ($cfg) use ($isByhand) {
                 return $isByhand($cfg->channel ?? null);
             }));
+
         } else {
             // Сайт: канал должен быть реальным id и совпадать с channelId
             $configs = array_values(array_filter($configs, static function ($cfg) use ($channelId, $isByhand) {

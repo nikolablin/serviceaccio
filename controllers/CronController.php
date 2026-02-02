@@ -7,6 +7,7 @@ use yii\web\Controller;
 use yii\web\Response;
 use app\models\Kaspi;
 use app\models\Moysklad;
+use app\models\MoyskladV2;
 use app\models\Website;
 use app\models\Telegram;
 use app\models\Whatsapp;
@@ -49,6 +50,7 @@ class CronController extends Controller
     public function actionSetkaspiorders() // Создание заказов Каспи
     {
       $moysklad     = new Moysklad();
+      $moysklad2    = new MoyskladV2();
       $kaspi        = new Kaspi();
       $kaspiOrders  = new KaspiOrders();
       $website      = new Website();
@@ -101,6 +103,8 @@ class CronController extends Controller
                   break;
               }
 
+              $addVatToProduct = $moysklad2->checkOrganizationVatEnabled($projectConfig->organization);
+
               foreach ($productsData->data as $prdata) {
                 $productInfo            = $kaspi->getKaspiLinkData('https://kaspi.kz/shop/api/v2/masterproducts/' . $prdata->relationships->product->data->id . '/merchantProduct',$shopkey);
                 $productWebSiteData     = $website->getProductWebDataBySku($productInfo->data->attributes->code);
@@ -126,6 +130,7 @@ class CronController extends Controller
                   $prObj->quantity  = $prdata->attributes->quantity;
                   $prObj->price     = $prdata->attributes->basePrice;
                   $prObj->type      = $productWebSiteData->product_type;
+                  $prObj->vat       = ($addVatToProduct) ? Yii::$app->params['moyskladv2']['vat']['value'] : false;
                   $creatingOrder->products[] = $prObj;
                 }
                 else {
@@ -164,7 +169,7 @@ class CronController extends Controller
               $creatingOrder->orderId    = $order->attributes->code;
               $creatingOrder->orderExtId = $order->id;
               $creatingOrder->deliveryDate    = $kaspi->getKaspiDeliveryDate($order);
-              $creatingOrder->deliveryTime    = ($creatingOrder->deliveryDate) ? $moysklad->getDeliveryTime($order) : false;
+              $creatingOrder->deliveryTime    = ($creatingOrder->deliveryDate) ? $moysklad->getDeliveryTime($order->attributes->plannedDeliveryDate,'kaspi') : false;
 
               $creatingOrder->paymentStatus   = $projectConfig->payment_status;
               $creatingOrder->paymentType     = $projectConfig->payment_type;
@@ -392,7 +397,7 @@ class CronController extends Controller
                   $setTgMessage = false;
                   $returnType   = null;
 
-                  switch ($prevStatus) {
+                  switch ($prevStatus) { 
                       case 'created': // Без чека - Возврат на склад
                           $demandStateMeta = $moysklad->buildStateMeta(
                               'demand',
@@ -502,6 +507,10 @@ class CronController extends Controller
         }
       }
     }
+
+
+
+
 
     /*
     Закрытие смен всех касс.

@@ -45,7 +45,6 @@ class ApproveToDemand extends AbstractStep
         (new V2OrdersRepository())->upsert((string)$order->id, (string)$stateId);
 
 
-
         /* ------------------ Действия при CREATE или UPDATE ---------------- */
 
         // 2) Резолвим конфиг
@@ -55,6 +54,8 @@ class ApproveToDemand extends AbstractStep
             Log::{$log}('ApproveToDemand: config not resolved', [ 'orderId' => $order->id ?? null, ]);
             return;
         }
+
+        $config->status = 'byhand';
 
         // 3.1) Если проект 🔴 Kaspi, то статус заказа не трогаем и доставка та, которая уже установлена
         if(in_array($projectId,Yii::$app->params['moyskladv2']['kaspiProjects'])){
@@ -130,7 +131,7 @@ class ApproveToDemand extends AbstractStep
           }
         }
 
-        if($createDemand){
+        if($createDemand){ 
           // Вообще не нашли отгрузку, создаем
           $createdDemand = $ctx->ms()->ensureDemandFromOrder($order, null, [ 'state' => Yii::$app->params['moyskladv2']['demands']['states']['todemand'] ]);
 

@@ -29,7 +29,6 @@ class Transferred extends AbstractStep
         }
 
         $order     = $ctx->getOrder();
-
         if (!$order || empty($order->id)) {
             Log::demandUpdate('Transferred: order not loaded', [ 'href' => $ctx->event->meta->href ?? null, ]);
             return;
@@ -40,6 +39,9 @@ class Transferred extends AbstractStep
         $paymentTypeId  = $ctx->ms()->getAttributeValue($demand, Yii::$app->params['moyskladv2']['demands']['attributesFields']['paymentType']);
         $isCash         = ($paymentTypeId && $paymentTypeId === (Yii::$app->params['moyskladv2']['demands']['attributesFieldsValues']['cashYes'] ?? ''));
         $moneyType      = ($isCash) ? 'cashin' : 'paymentin';
+
+        Log::demandUpdate("Transferred: money type {$moneyType}");
+
         $moneyinState   = ($isCash) ?
                               Yii::$app->params['moyskladv2']['moneyin']['states']['cashin']['waitForIncoming']
                               :
@@ -49,6 +51,7 @@ class Transferred extends AbstractStep
         $incomeStreamAttr     = Yii::$app->params['moyskladv2']['moneyin']['attributesFields'][$moneyType]['incomeStream'];
         $paymentTypeAttr      = Yii::$app->params['moyskladv2']['moneyin']['attributesFields'][$moneyType]['paymentType'];
         $orderNumberAttr      = Yii::$app->params['moyskladv2']['moneyin']['attributesFields'][$moneyType]['orderNumber'];
+        $fiscalAttr           = Yii::$app->params['moyskladv2']['moneyin']['attributesFields'][$moneyType]['fiscalNeed'];
 
         if(in_array($projectId,Yii::$app->params['moyskladv2']['marketplaceProjects'])){
           $incomeStreamAttrVal = Yii::$app->params['moyskladv2']['moneyin']['attributesFieldsValues']['marketSales'];
@@ -66,51 +69,81 @@ class Transferred extends AbstractStep
             }
         }
 
-        $options = [
-          'sum'           => $demand->sum,
-          'stateId'       => $moneyinState,
-          'moment'        => date('Y-m-d H:i:s'),
-          'applicable'    => false,
-          'incomingDate'  => date('Y-m-d H:i:s'),
-          'attributes'    => [
-            $managerAttr      => ['type' => 'string', 'value' => $ownerName],
-            $incomeStreamAttr => ['type' => 'customentity', 'value' => $incomeStreamAttrVal, 'dictionary' => Yii::$app->params['moyskladv2']['moneyin']['attributesFieldsDictionaries']['incomeStream']],
-            $paymentTypeAttr  => ['type' => 'customentity', 'value' => $paymentTypeId, 'dictionary' => Yii::$app->params['moyskladv2']['moneyin']['attributesFieldsDictionaries']['paymentType']],
-          ]
-        ];
+        $fiscalVal  = $ctx->ms()->getAttributeValue($demand, Yii::$app->params['moyskladv2']['demands']['attributesFields']['fiscal']);
+        $fiscalNeedValue = ($fiscalVal && $fiscalVal === Yii::$app->params['moyskladv2']['demands']['attributesFieldsValues']['fiscalYes']) ? true : false;
 
-        if(!$isCash):
-          $orderNum  = ($ctx->ms()->getAttributeValue( $demand, Yii::$app->params['moyskladv2']['demands']['attributesFields']['marketPlaceNum'] ) ?: '');
-          $options['attributes'][$orderNumberAttr] = ['type' => 'string', 'value' => $orderNum];
-        endif;
-
-        $money = $ctx->ms()->ensureMoneyInFromDemand($demand, $moneyType, $options);
-
-        if ($money && !empty($money->data->id)) {
-            $money        = $money->data;
-            $moneyId      = (string)$money->id;
-            $moneyStateId = basename((string)($money->state->meta->href ?? ''));
-            $orderMsId    = '';
-
-            if (!empty($demand->customerOrder->meta->href)) {
-                $orderMsId = basename((string)$demand->customerOrder->meta->href);
-            } elseif (!empty($ctx->getOrder()->meta->href)) {
-                $orderMsId = basename((string)$ctx->getOrder()->meta->href);
+        // Проверка входящего платежа
+        $paymentExist = false;
+        if (!empty($demand->payments) && is_array($demand->payments)) {
+            foreach ($demand->payments as $p) {
+                $type = $p->meta->type ?? null;
+                if ($type === 'paymentin' || $type === 'cashin') {
+                    $paymentExist = true;
+                    break;
+                }
             }
-
-            (new V2MoneyInRepository())->upsert(
-                (string)$money->id,
-                (string)$moneyStateId,
-                (string)$orderMsId,
-                (string)$moneyType,
-                (int)($money->sum ?? 0),
-                json_encode($money, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-            );
-
-        } else {
-            Log::demandUpdate( "Transferred: ensureMoneyInFromDemand failed. demand=" . basename((string)($demand->meta->href ?? '')) );
         }
 
+        if (!$paymentExist) {
+          $paymentExist = !empty($demand->paymentIn->meta->href) || !empty($demand->cashIn->meta->href);
+        }
+
+        if(!$paymentExist){
+
+          $options = [
+            'sum'           => $demand->sum,
+            'stateId'       => $moneyinState,
+            'moment'        => date('Y-m-d H:i:s'),
+            'applicable'    => false,
+            'incomingDate'  => date('Y-m-d H:i:s'),
+            'attributes'    => [
+              $managerAttr      => ['type' => 'string', 'value' => $ownerName],
+              $incomeStreamAttr => ['type' => 'customentity', 'value' => $incomeStreamAttrVal, 'dictionary' => Yii::$app->params['moyskladv2']['moneyin']['attributesFieldsDictionaries']['incomeStream']],
+              $paymentTypeAttr  => ['type' => 'customentity', 'value' => $paymentTypeId, 'dictionary' => Yii::$app->params['moyskladv2']['moneyin']['attributesFieldsDictionaries']['paymentType']],
+            ]
+          ];
+
+          if(!$isCash):
+            $orderNum  = ($ctx->ms()->getAttributeValue( $demand, Yii::$app->params['moyskladv2']['demands']['attributesFields']['marketPlaceNum'] ) ?: '');
+            $options['attributes'][$orderNumberAttr]  = ['type' => 'string', 'value' => $orderNum];
+          else:
+            if($fiscalNeedValue){
+              $fiscalNeedValue = Yii::$app->params['moyskladv2']['moneyin']['attributesFieldsDictionariesValues']['cashin']['needFiscalYes'];
+            }
+            else {
+              $fiscalNeedValue = Yii::$app->params['moyskladv2']['moneyin']['attributesFieldsDictionariesValues']['cashin']['needFiscalNo'];
+            }
+            $options['attributes'][$fiscalAttr]       = ['type' => 'customentity', 'value' => $fiscalNeedValue, 'dictionary' => Yii::$app->params['moyskladv2']['moneyin']['attributesFieldsDictionaries']['fiscalNeed']];
+          endif;
+
+          $money = $ctx->ms()->ensureMoneyInFromDemand($demand, $moneyType, $options);
+
+          if ($money && !empty($money->data->id)) {
+              $money        = $money->data;
+              $moneyId      = (string)$money->id;
+              $moneyStateId = basename((string)($money->state->meta->href ?? ''));
+              $orderMsId    = '';
+
+              if (!empty($demand->customerOrder->meta->href)) {
+                  $orderMsId = basename((string)$demand->customerOrder->meta->href);
+              } elseif (!empty($ctx->getOrder()->meta->href)) {
+                  $orderMsId = basename((string)$ctx->getOrder()->meta->href);
+              }
+
+              (new V2MoneyInRepository())->upsert(
+                  (string)$money->id,
+                  (string)$moneyStateId,
+                  (string)$orderMsId,
+                  (string)$moneyType,
+                  (int)($money->sum ?? 0),
+                  json_encode($money, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+              );
+
+          } else {
+              Log::demandUpdate( "Transferred: ensureMoneyInFromDemand failed. demand=" . basename((string)($demand->meta->href ?? '')) );
+          }
+
+        }
 
         // Обновить статус отгрузки в локальной бд
         $demandStateHref = $demand->state->meta->href ?? null;
@@ -120,9 +153,8 @@ class Transferred extends AbstractStep
             (new V2DemandsRepository())->upsert($demand->id, (string)$demandStateId, $order->id);
             $demand = $ctx->ms()->ensureDemandFromOrder($order, $demand,[ 'state' => Yii::$app->params['moyskladv2']['demands']['states']['todemand'] ]);
         } else {
-            Log::{$log}('Transferred: demand loaded without state', [ 'orderId'  => $order->id, 'demandId' => $demand->id, ]);
+            Log::demandUpdate('Transferred: demand loaded without state', [ 'orderId'  => $order->id, 'demandId' => $demand->id, ]);
         }
-
 
         // Заказу поставить статус Завершен
         $ctx->ms()->updateEntityState(

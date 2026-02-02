@@ -24,7 +24,7 @@ class MoyskladV2 extends Model
         $resp = $this->request('GET', $href);
 
         if ($resp['ok'] && is_object($resp['data'])) {
-            return $resp['data']; 
+            return $resp['data'];
         }
 
         return null;
@@ -915,6 +915,22 @@ class MoyskladV2 extends Model
                 continue;
             }
 
+            if ($type === 'boolean') {
+                // допускаем: true/false, 1/0, "1"/"0", "true"/"false", "yes"/"no"
+                $bool = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+
+                if ($bool === null) {
+                    Log::orderUpdate("normalizeAttributesForEntity: boolean invalid entity={$entity} attr={$attrId}");
+                    continue;
+                }
+
+                $rows[] = [
+                    'meta'  => $this->buildAttributeMeta($entity, $attrId),
+                    'value' => $bool,
+                ];
+                continue;
+            }
+
             // по умолчанию — строка/скаляр (и bool/int тоже пройдут)
             $rows[] = [
                 'meta'  => $this->buildAttributeMeta($entity, $attrId),
@@ -1014,24 +1030,60 @@ class MoyskladV2 extends Model
     {
         $positions = [];
 
+        // пул серийников по ассортименту (чтобы "вынимать" и не дублировать)
+        $serialPool = [];
+
         foreach ($orderRows as $p) {
             if (empty($p->assortment->meta)) {
                 continue;
             }
 
+            $assortmentId = basename((string)($p->assortment->meta->href ?? ''));
+            $isSerialTrackable = (bool)($p->assortment->isSerialTrackable ?? false);
+
+            // Важно: серийники == штуки, значит quantity должен быть целым
+            $qtyFloat = (float)($p->quantity ?? 0);
+            $qty = (int)round($qtyFloat);
+
             $row = [
                 'assortment' => ['meta' => $p->assortment->meta],
-                'quantity'   => (float)($p->quantity ?? 0),
+                'quantity'   => $qtyFloat,
             ];
 
-            // По желанию переносим финполя (если у вас в заказе они важны)
-            if (isset($p->price))    { $row['price'] = (int)$p->price; }
-            if (isset($p->discount)) { $row['discount'] = (float)$p->discount; }
-            if (isset($p->vat))      { $row['vat'] = (int)$p->vat; }
-            if (isset($p->vatEnabled)) { $row['vatEnabled'] = (bool)$p->vatEnabled; }
+            if (isset($p->price))       { $row['price'] = (int)$p->price; }
+            if (isset($p->discount))    { $row['discount'] = (float)$p->discount; }
+            if (isset($p->vat))         { $row['vat'] = (int)$p->vat; }
+            if (isset($p->vatEnabled))  { $row['vatEnabled'] = (bool)$p->vatEnabled; }
+            if (isset($p->reserve))     { $row['reserve'] = (float)$p->reserve; }
 
-            // Можно перенести reserve, если используете резервы
-            if (isset($p->reserve)) { $row['reserve'] = (float)$p->reserve; }
+            if ($isSerialTrackable) {
+                // 1) Если серийники пришли в самой позиции (самый правильный вариант)
+                $thingsSrc = null;
+
+                if (!empty($p->things) && is_array($p->things)) {
+                    $thingsSrc = $p->things;
+                } elseif (!empty($p->assortment->things) && is_array($p->assortment->things)) {
+                    // 2) Иначе берем из пула товара, но только qty штук
+                    if (!isset($serialPool[$assortmentId])) {
+                        $serialPool[$assortmentId] = array_values(
+                            array_filter(array_map('strval', $p->assortment->things))
+                        );
+                    }
+                    $thingsSrc = array_splice($serialPool[$assortmentId], 0, max(0, $qty));
+                }
+
+                $things = $thingsSrc ? array_values(array_filter(array_map('strval', $thingsSrc))) : [];
+
+                // Важно: things должно строго соответствовать quantity
+                if ($qty > 0 && count($things) === $qty) {
+                    $row['things'] = $things;
+                } else {
+                    // если qty не целое или серийников не хватает/слишком много — НЕ шлём things,
+                    // иначе отгрузка/списание может отклониться из-за несоответствия
+                    // (по желанию можно залогировать)
+                    // Log::orderCreate('SERIAL_MISMATCH', ['assortmentId'=>$assortmentId,'qty'=>$qtyFloat,'thingsCount'=>count($things)]);
+                }
+            }
 
             $positions[] = $row;
         }
@@ -1040,7 +1092,6 @@ class MoyskladV2 extends Model
     }
 
     /* ------------- EOF Формирование пакета товаров из заказа в отгрузку ------------- */
-
 
 
 
@@ -1269,4 +1320,90 @@ class MoyskladV2 extends Model
     }
 
     /* EOF Подготовка файла и загрузка в МС */
+
+
+    /* Работа с товарами */
+
+    public function checkOrganizationVatEnabled($orgId)
+    {
+      if(in_array($orgId, Yii::$app->params['moyskladv2']['vat']['vatOrganizations'], true)) {
+        return true;
+      }
+
+      return false;
+    }
+
+    public function buildCustomerOrderPositionsVatPatch(object $order, int $vatPercent): array
+    {
+        $patches = [];
+
+        $positions = $this->getCustomerOrderPositions($order);
+        if (!$positions) {
+            return $patches;
+        }
+
+        foreach ($positions as $pos) {
+            $posId = $pos->id ?? null;
+            if (!$posId) { continue; }
+
+            $vatEnabled = (bool)($pos->vatEnabled ?? false);
+            $vat        = (int)($pos->vat ?? 0);
+
+            if ($vatEnabled === true && $vat === $vatPercent) {
+                continue;
+            }
+
+            $patches[] = [
+                'positionId' => (string)$posId,
+                'payload'    => [
+                    'vatEnabled' => true,
+                    'vat'        => $vatPercent,
+                ],
+                'before'     => [
+                    'vatEnabled' => $vatEnabled,
+                    'vat'        => $vat,
+                ],
+            ];
+        }
+
+        return $patches;
+    }
+
+    public function applyCustomerOrderPositionsVatPatch(string $orderId, array $patches): array
+    {
+        $res = [
+            'total'     => count($patches),
+            'changed'   => 0,
+            'errors'    => [],
+            'has_error' => false,
+        ];
+
+        foreach ($patches as $p) {
+            $posId  = $p['positionId'] ?? null;
+            $payload = $p['payload'] ?? null;
+
+            if (!$posId || empty($payload)) {
+                continue;
+            }
+
+            $r = $this->request('PUT', "entity/customerorder/{$orderId}/positions/{$posId}", $payload);
+
+            if (empty($r['ok'])) {
+                $res['has_error'] = true;
+                $res['errors'][] = [
+                    'positionId' => $posId,
+                    'code'       => $r['code'] ?? null,
+                    'raw'        => $r['raw'] ?? null,
+                ];
+                // строго: стопаемся сразу
+                break;
+            }
+
+            $res['changed']++;
+        }
+
+        return $res;
+    }
+
+    /* EOF Работа с продуктами */
 }

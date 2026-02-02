@@ -104,18 +104,28 @@ return [
             'incomeStream'  => '9401deb0-0bc0-11ec-0a80-021c0019cf2b',
             'paymentType'   => 'f36cd71a-ace5-11ed-0a80-06ac001a56c2',
             'orderNumber'   => '886cd568-ea7f-11ed-0a80-10a80071443d',
+            'fiscalNeed'    => false
           ],
           'cashin' => [
             'manager'       => '442918d8-aa20-11ed-0a80-0fba00223f9c',
             'incomeStream'  => '8184c165-0bc0-11ec-0a80-0817001a8435',
             'paymentType'   => '7e92f4ab-ace6-11ed-0a80-0570001a3e98',
             'orderNumber'   => false,
+            'fiscalNeed'    => '03352294-a4e9-11eb-0a80-00dd001686d3'
           ]
         ],
 
         'attributesFieldsDictionaries' => [
           'incomeStream'  => '1762788a-0bc0-11ec-0a80-00750019f2ed',
-          'paymentType'   => 'd8662995-836c-11ed-0a80-04de0034157c'
+          'paymentType'   => 'd8662995-836c-11ed-0a80-04de0034157c',
+          'fiscalNeed'    => 'b6fc53ef-a4e7-11eb-0a80-0dc70016db30'
+        ],
+
+        'attributesFieldsDictionariesValues' => [
+          'cashin' => [
+            'needFiscalYes' => 'c3c0ee4f-a4e7-11eb-0a80-075b00176e05',
+            'needFiscalNo' => 'c919fb37-a4e7-11eb-0a80-00dd00166ffd'
+          ],
         ],
 
         'attributesFieldsValues' => [
@@ -163,7 +173,7 @@ return [
           '4e4537e9-a0a2-11ed-0a80-1043003e432d' => 'eb46b957-a4e7-11eb-0a80-014c00169cca', // Нужен ли фискальный чек - ❗️Нужен ли фискальный чек?
           'a7f0812d-a0a3-11ed-0a80-114f003fc7f9' => 'db30d9e9-a4e2-11eb-0a80-09b900160bbe', // Номер заказа маркетплейса
           'f27758fb-b05d-11ed-0a80-09ae002b500b' => '64869eb0-c29d-11eb-0a80-08be00040769', // Статус оплаты
-          '45bdad04-68d6-11ee-0a80-095d000776da' => 'b15cb6d6-295c-11ef-0a80-005b0036e745',
+          '45bdad04-68d6-11ee-0a80-095d000776da' => 'b15cb6d6-295c-11ef-0a80-005b0036e745', // ☎️ Каналы связи
           'dd839a8b-47a1-11ed-0a80-01fb00205e82' => '892e27a6-99f5-11eb-0a80-0451000e89e5' // Проект
         ],
       ],
@@ -191,6 +201,12 @@ return [
         ],
       ],
 
+      'salesreturn' => [
+        'states' => [
+          'finish' => '88b390bc-87dc-11ec-0a80-0fbe0028a739',
+        ],
+      ],
+
       'kaspiProjects' => [
         'accio' => '5f351348-d269-11f0-0a80-15120016d622', // 🔴 Kaspi Accio
         'tutto' => '431a8172-d26a-11f0-0a80-0f110016cabd', // 🔴 Tutto Capsule Kaspi
@@ -198,6 +214,14 @@ return [
       ],
 
       'woltProject' => 'a463b9da-d26c-11f0-0a80-1a6b0016a57a', // Wolt
+
+      'vat' => [
+        'vatOrganizations' => [ // Организации, где применяется НДС
+          '3bd63649-f257-11ea-0a80-005d003d9ee4', // Итал Фудс
+          'cdc20315-59ab-11ec-0a80-07d3000e5794', // Скельта
+        ],
+        'value' => '16',
+      ],
 
       'marketplaceProjects' => [
         '5f351348-d269-11f0-0a80-15120016d622', // 🔴 Kaspi Accio

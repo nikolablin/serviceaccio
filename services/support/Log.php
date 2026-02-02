@@ -20,6 +20,11 @@ class Log
         self::write('demand.update', $message, $context);
     }
 
+    public static function salesreturnUpdate(string $message, array $context = []): void
+    {
+        self::write('salesreturn.update', $message, $context);
+    }
+
     public static function cashboxError(string $message, array $context = []): void
     {
         self::write('cashbox.error', '[CASHBOX] ' . $message, $context);
@@ -32,7 +37,6 @@ class Log
         if (!empty($context)) {
             $line .= ' | ' . json_encode($context, JSON_UNESCAPED_UNICODE);
         }
-
         Yii::info($line, $category);
     }
 }
