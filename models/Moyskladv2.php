@@ -755,121 +755,247 @@ class MoyskladV2 extends Model
     /* ------------- EOF Формирование счета на оплату ------------- */
 
 
+    /* Формаирование счет-фактуры */
+
+    public function ensureFactureoutFromDemand(object $demand, array $options = [])
+    {
+      $demandId = basename((string)($demand->meta->href ?? ''));
+      if (!$demandId) {
+        Log::demandUpdate("ensureFactureoutFromDemand: demand has no meta->href");
+        return false;
+      }
+
+      $demandHref = "https://api.moysklad.ru/api/remap/1.2/entity/demand/{$demandId}";
+
+      $sum = (int)($options['sum'] ?? ($demand->sum ?? 0));
+      if ($sum <= 0) {
+        Log::demandUpdate("ensureFactureoutFromDemand: sum <= 0 demand={$demandId}");
+        return false;
+      }
+
+      $agentMeta    = $demand->agent->meta ?? null;
+      $orgMeta      = $demand->organization->meta ?? null;
+      $projectMeta  = $demand->project->meta ?? null;
+      $ownerMeta    = $demand->owner->meta ?? null;
+
+      if (!$agentMeta || !$orgMeta || !$projectMeta || !$ownerMeta) {
+        // пробуем догрузить demand полностью
+        $fresh = $this->getHrefData($demandHref);
+        if ($fresh) {
+          $demand       = $fresh;
+          $agentMeta    = $demand->agent->meta ?? null;
+          $orgMeta      = $demand->organization->meta ?? null;
+          $projectMeta  = $demand->project->meta ?? null;
+          $ownerMeta    = $demand->owner->meta ?? null;
+        }
+      }
+
+      if (!$agentMeta || !$orgMeta || !$projectMeta || !$ownerMeta) {
+        Log::demandUpdate("ensureFactureoutFromDemand: demand missing agent/organization/project/owner demand={$demandId}");
+        return false;
+      }
+
+      $stateId = (string)($options['stateId'] ?? '');
+      $stateMeta = $stateId ? $this->buildStateMeta('factureout', $stateId) : null;
+
+      // 1) Пытаемся найти уже привязанную счет-фактуру из demand (если МС отдает такое поле)
+      $existingHref = $this->extractLinkedFactureoutHrefFromDemand($demand);
+
+      $payload = [
+      'organization' => ['meta' => $orgMeta],
+      'agent'        => ['meta' => $agentMeta],
+      'project'      => ['meta' => $projectMeta],
+      'owner'        => ['meta' => $ownerMeta],
+      'sum'          => $sum,
+      'demands' => [
+          [
+            'meta' => [
+              'href'      => $demandHref,
+              'type'      => 'demand',
+              'mediaType' => 'application/json',
+            ],
+          ]
+        ],
+      ];
+
+      if (array_key_exists('moment', $options) && $options['moment']) {
+        $payload['moment'] = (string)$options['moment'];
+      }
+
+      if (array_key_exists('applicable', $options)) {
+        $payload['applicable'] = (bool)$options['applicable'];
+      }
+
+      if ($stateMeta) {
+        $payload['state'] = ['meta' => $stateMeta];
+      }
+
+      // Если найдена существующая — обновим, иначе создадим
+      try {
+        if ($existingHref) {
+          $id = basename($existingHref);
+
+          $res = $this->request('PUT', "entity/factureout/{$id}", $payload);
+
+          if (!$res) {
+            Log::demandUpdate("ensureFactureoutFromDemand: PUT failed id={$id} demand={$demandId}");
+            return false;
+          }
+          return is_object($res) ? $res : (object)$res;
+        }
+
+        $res = $this->request('POST', "entity/factureout", $payload);
+        if (!$res) {
+          Log::demandUpdate("ensureFactureoutFromDemand: POST failed demand={$demandId}");
+          return false;
+        }
+
+        return is_object($res) ? $res : (object)$res;
+
+      } catch (\Throwable $e) {
+        Log::demandUpdate("ensureFactureoutFromDemand: exception demand={$demandId} msg=" . $e->getMessage());
+        return false;
+      }
+    }
+
+    /**
+     * Пытается вытащить href привязанного factureOut прямо из объекта demand, если поле доступно.
+     * Возвращает href или ''.
+     */
+    private function extractLinkedFactureoutHrefFromDemand(object $demand): string
+    {
+        // Иногда в API могут прилетать связки вида payments[] с meta->type
+        if (isset($demand->factureOut) && is_object($demand->factureOut)) {
+          $f = $demand->factureOut;
+          if (!empty($f->meta->href)) {
+              return (string)$f->meta->href;
+          }
+        }
+
+        return '';
+    }
+
+    /* EOF Формаирование счет-фактуры */
+
     /* Формирование входящего платежа */
 
     public function ensureMoneyInFromDemand(object $demand, string $type, array $options = [])
     {
-        $type = trim(strtolower($type));
-        if (!in_array($type, ['paymentin', 'cashin'], true)) {
-            Log::orderUpdate("ensureMoneyInFromDemand: invalid type={$type}");
+      $type = trim(strtolower($type));
+      if (!in_array($type, ['paymentin', 'cashin'], true)) {
+        Log::demandUpdate("ensureMoneyInFromDemand: invalid type={$type}");
+        return false;
+      }
+
+      $demandId = basename((string)($demand->meta->href ?? ''));
+      if (!$demandId) {
+        Log::demandUpdate("ensureMoneyInFromDemand: demand has no meta->href");
+        return false;
+      }
+
+      $demandHref = "https://api.moysklad.ru/api/remap/1.2/entity/demand/{$demandId}";
+
+      $sum = (int)($options['sum'] ?? ($demand->sum ?? 0));
+      if ($sum <= 0) {
+        Log::demandUpdate("ensureMoneyInFromDemand: sum <= 0 demand={$demandId}");
+        return false;
+      }
+
+      $agentMeta      = $demand->agent->meta ?? null;
+      $orgMeta        = $demand->organization->meta ?? null;
+      $orgAccountMeta = $demand->organizationAccount->meta ?? null;
+      $projectMeta    = $demand->project->meta ?? null;
+      $ownerMeta      = $demand->owner->meta ?? null;
+
+      if (!$agentMeta || !$orgMeta || !$projectMeta || !$ownerMeta || $orgAccountMeta) {
+        // пробуем догрузить demand полностью
+        $fresh = $this->getHrefData($demandHref);
+        if ($fresh) {
+          $demand = $fresh;
+          $agentMeta      = $demand->agent->meta ?? null;
+          $orgMeta        = $demand->organization->meta ?? null;
+          $orgAccountMeta = $demand->organizationAccount->meta ?? null;
+          $projectMeta    = $demand->project->meta ?? null;
+          $ownerMeta      = $demand->owner->meta ?? null;
+        }
+      }
+
+      if (!$agentMeta || !$orgMeta || !$projectMeta || !$ownerMeta || !$orgAccountMeta) {
+        Log::demandUpdate("ensureMoneyInFromDemand: demand missing agent/organization/project/owner demand={$demandId}", [ 'agentMeta' => $agentMeta, 'orgMeta' => $orgMeta, 'projectMeta' => $projectMeta, 'ownerMeta' => $ownerMeta, 'orgAccountMeta' => $orgAccountMeta ]);
+        return false;
+      }
+
+      $stateId = (string)($options['stateId'] ?? '');
+      $stateMeta = $stateId ? $this->buildStateMeta($type, $stateId) : null;
+
+      // 1) Пытаемся найти уже привязанный платеж из demand (если МС отдает такое поле)
+      // В разных конфигурациях это может быть payments / paymentIn / cashIn — поэтому делаем мягко.
+      $existingHref = $this->extractLinkedMoneyInHrefFromDemand($demand, $type);
+
+      // 2) Fallback: поиск по фильтру, что в operations присутствует demandHref.
+      // Если фильтр не сработает в вашей МС — просто не найдем и создадим новый.
+      if (!$existingHref) {
+        $existingHref = $this->findMoneyInHrefByDemandHref($type, $demandHref);
+      }
+
+      $payload = [
+        'organization'        => ['meta' => $orgMeta],
+        'organizationAccount' => ['meta' => $orgAccountMeta],
+        'agent'               => ['meta' => $agentMeta],
+        'project'             => ['meta' => $projectMeta],
+        'owner'               => ['meta' => $ownerMeta],
+        'sum'                 => $sum,
+        'operations' => [
+            [
+              'meta'      => ['href' => $demandHref, 'type' => 'demand', 'mediaType' => 'application/json'],
+              'linkedSum' => $sum,
+            ]
+          ],
+      ];
+
+      if (array_key_exists('moment', $options) && $options['moment']) {
+        $payload['moment'] = (string)$options['moment'];
+      }
+
+      if (array_key_exists('applicable', $options)) {
+        $payload['applicable'] = (bool)$options['applicable'];
+      }
+
+      if ($stateMeta) {
+        $payload['state'] = ['meta' => $stateMeta];
+      }
+
+      if (!empty($options['attributes']) && is_array($options['attributes'])) {
+        $payload['attributes'] = $this->normalizeAttributesForEntity($type, $options['attributes']);
+      }
+      // Если найден существующий — обновим, иначе создадим
+      try {
+        if ($existingHref) {
+          $id = basename($existingHref);
+
+          $res = $this->request('PUT', "entity/{$type}/{$id}", $payload);
+          if (!$res) {
+            Log::demandUpdate("ensureMoneyInFromDemand: PUT failed type={$type} id={$id} demand={$demandId}");
             return false;
+          }
+          return is_object($res) ? $res : (object)$res;
         }
 
-        $demandId = basename((string)($demand->meta->href ?? ''));
-        if (!$demandId) {
-            Log::orderUpdate("ensureMoneyInFromDemand: demand has no meta->href");
-            return false;
+        $res = $this->request('POST', "entity/{$type}", $payload);
+
+        if (!$res) {
+          Log::demandUpdate("ensureMoneyInFromDemand: POST failed type={$type} demand={$demandId}");
+          return false;
         }
 
-        $demandHref = "https://api.moysklad.ru/api/remap/1.2/entity/demand/{$demandId}";
+        return is_object($res) ? $res : (object)$res;
 
-        $sum = (int)($options['sum'] ?? ($demand->sum ?? 0));
-        if ($sum <= 0) {
-            Log::orderUpdate("ensureMoneyInFromDemand: sum <= 0 demand={$demandId}");
-            return false;
-        }
-
-        $agentMeta    = $demand->agent->meta ?? null;
-        $orgMeta      = $demand->organization->meta ?? null;
-        $projectMeta  = $demand->project->meta ?? null;
-        $ownerMeta    = $demand->owner->meta ?? null;
-
-        if (!$agentMeta || !$orgMeta || !$projectMeta || !$ownerMeta) {
-            // пробуем догрузить demand полностью
-            $fresh = $this->getHrefData($demandHref);
-            if ($fresh) {
-                $demand = $fresh;
-                $agentMeta    = $demand->agent->meta ?? null;
-                $orgMeta      = $demand->organization->meta ?? null;
-                $projectMeta  = $demand->project->meta ?? null;
-                $ownerMeta    = $demand->owner->meta ?? null;
-            }
-        }
-
-        if (!$agentMeta || !$orgMeta || !$projectMeta || !$ownerMeta) {
-            Log::orderUpdate("ensureMoneyInFromDemand: demand missing agent/organization/project/owner demand={$demandId}");
-            return false;
-        }
-
-        $stateId = (string)($options['stateId'] ?? '');
-        $stateMeta = $stateId ? $this->buildStateMeta($type, $stateId) : null;
-
-        // 1) Пытаемся найти уже привязанный платеж из demand (если МС отдает такое поле)
-        // В разных конфигурациях это может быть payments / paymentIn / cashIn — поэтому делаем мягко.
-        $existingHref = $this->extractLinkedMoneyInHrefFromDemand($demand, $type);
-
-        // 2) Fallback: поиск по фильтру, что в operations присутствует demandHref.
-        // Если фильтр не сработает в вашей МС — просто не найдем и создадим новый.
-        if (!$existingHref) {
-            $existingHref = $this->findMoneyInHrefByDemandHref($type, $demandHref);
-        }
-
-        $payload = [
-            'organization' => ['meta' => $orgMeta],
-            'agent'        => ['meta' => $agentMeta],
-            'project'      => ['meta' => $projectMeta],
-            'owner'        => ['meta' => $ownerMeta],
-            'sum'          => $sum,
-            'operations'   => [
-                [
-                    'meta'      => ['href' => $demandHref, 'type' => 'demand', 'mediaType' => 'application/json'],
-                    'linkedSum' => $sum,
-                ]
-            ],
-        ];
-
-        if (array_key_exists('moment', $options) && $options['moment']) {
-            $payload['moment'] = (string)$options['moment'];
-        }
-
-        if (array_key_exists('applicable', $options)) {
-            $payload['applicable'] = (bool)$options['applicable'];
-        }
-
-        if ($stateMeta) {
-            $payload['state'] = ['meta' => $stateMeta];
-        }
-
-        if (!empty($options['attributes']) && is_array($options['attributes'])) {
-            $payload['attributes'] = $this->normalizeAttributesForEntity($type, $options['attributes']);
-        }
-        // Если найден существующий — обновим, иначе создадим
-        try {
-            if ($existingHref) {
-                $id = basename($existingHref);
-
-                $res = $this->request('PUT', "entity/{$type}/{$id}", $payload);
-                if (!$res) {
-                    Log::orderUpdate("ensureMoneyInFromDemand: PUT failed type={$type} id={$id} demand={$demandId}");
-                    return false;
-                }
-                return is_object($res) ? $res : (object)$res;
-            }
-
-            $res = $this->request('POST', "entity/{$type}", $payload);
-
-            if (!$res) {
-                Log::orderUpdate("ensureMoneyInFromDemand: POST failed type={$type} demand={$demandId}");
-                return false;
-            }
-
-            return is_object($res) ? $res : (object)$res;
-
-        } catch (\Throwable $e) {
-            Log::orderUpdate("ensureMoneyInFromDemand: exception type={$type} demand={$demandId} msg=" . $e->getMessage());
-            return false;
-        }
+      } catch (\Throwable $e) {
+        Log::demandUpdate("ensureMoneyInFromDemand: exception type={$type} demand={$demandId} msg=" . $e->getMessage());
+        return false;
+      }
     }
+
 
     private function normalizeAttributesForEntity(string $entity, array $attrs): array
     {
@@ -995,6 +1121,124 @@ class MoyskladV2 extends Model
     }
 
     /* EOF Формирование входящего платежа */
+
+
+    /*  Формирование возврата покупателя */
+
+    public function ensureSalesReturnFromDemand(object $demand, ?object $salesreturn = null, array $options = []): array
+    {
+        $demandId = basename((string)($demand->meta->href ?? $demand->id ?? ''));
+        if ($demandId === '') {
+            Log::demandUpdate("ensureSalesReturnFromDemand: demand has no id/meta->href");
+            return ['ok'=>false,'code'=>0,'err'=>'no_demand_id'];
+        }
+        $demandHref = "https://api.moysklad.ru/api/remap/1.2/entity/demand/{$demandId}";
+
+        // подтягиваем базовые meta
+        $agentMeta   = $demand->agent->meta ?? null;
+        $orgMeta     = $demand->organization->meta ?? null;
+        $storeMeta   = $demand->store->meta ?? null;
+        $projectMeta = $demand->project->meta ?? null;
+        $ownerMeta   = $demand->owner->meta ?? null;
+
+        if (!$agentMeta || !$orgMeta || !$storeMeta || !$ownerMeta) {
+            $fresh = $this->getDemand($demandId);
+            if ($fresh) {
+                $demand = $fresh;
+                $agentMeta   = $demand->agent->meta ?? null;
+                $orgMeta     = $demand->organization->meta ?? null;
+                $storeMeta   = $demand->store->meta ?? null;
+                $projectMeta = $demand->project->meta ?? null;
+                $ownerMeta   = $demand->owner->meta ?? null;
+            }
+        }
+
+        if (!$agentMeta || !$orgMeta || !$storeMeta || !$ownerMeta) {
+            Log::demandUpdate("ensureSalesReturnFromDemand: demand missing meta parts demand={$demandId}");
+            return ['ok'=>false,'code'=>0,'err'=>'demand_missing_meta'];
+        }
+
+        $stateId   = (string)($options['stateId'] ?? '');
+        $stateMeta = $stateId !== '' ? $this->buildStateMeta('salesreturn', $stateId) : null;
+
+        // позиции: берём из demand.positions.rows
+        $rows = [];
+
+        if (isset($demand->positions->rows) && is_array($demand->positions->rows)) {
+            foreach ($demand->positions->rows as $p) {
+                if (empty($p->assortment->meta)) continue;
+                if (empty($p->meta->href)) continue; // важно: нужна ссылка на саму позицию demand
+
+                $row = [
+                    'assortment' => ['meta' => $p->assortment->meta],
+                    'quantity'   => (float)($p->quantity ?? 0),
+
+                    // КЛЮЧЕВОЕ: привязка к строке продажи
+                    'demandPosition' => [
+                        'meta' => [
+                            'href'      => (string)$p->meta->href,
+                            'type'      => 'demandposition',
+                            'mediaType' => 'application/json',
+                        ],
+                    ],
+                ];
+
+                // (не обязательно, но часто полезно)
+                if (isset($p->price)) $row['price'] = (int)$p->price;
+                if (isset($p->vat)) $row['vat'] = (int)$p->vat;
+                if (isset($p->vatEnabled)) $row['vatEnabled'] = (bool)$p->vatEnabled;
+
+                $rows[] = $row;
+            }
+        }
+
+        $payload = [
+            'organization' => ['meta' => $orgMeta],
+            'agent'        => ['meta' => $agentMeta],
+            'store'        => ['meta' => $storeMeta],
+            'owner'        => ['meta' => $ownerMeta],
+        ];
+
+        if ($projectMeta) $payload['project'] = ['meta' => $projectMeta];
+
+        // основание (вариант A): demand
+        $payload['demand'] = [
+            'meta' => [
+                'href'      => $demandHref,
+                'type'      => 'demand',
+                'mediaType' => 'application/json',
+            ],
+        ];
+
+        if (!empty($rows)) {
+            $payload['positions'] = $rows;
+        }
+
+        if (array_key_exists('applicable', $options)) $payload['applicable'] = (bool)$options['applicable'];
+        if ($stateMeta) $payload['state'] = ['meta' => $stateMeta];
+
+        if (!empty($options['attributes']) && is_array($options['attributes'])) {
+          $payload['attributes'] = $this->normalizeAttributesForEntity('salesreturn', $options['attributes']);
+        }
+
+        // если передали существующий salesreturn объект — обновляем его, иначе создаём
+        $existingId = null;
+        if ($salesreturn && !empty($salesreturn->id)) {
+            $existingId = (string)$salesreturn->id;
+        }
+
+        if ($existingId) {
+            $res = $this->request('PUT', "entity/salesreturn/{$existingId}", $payload);
+            return $res;
+        }
+
+        $res = $this->request('POST', "entity/salesreturn", $payload);
+
+        return $res;
+    }
+
+
+    /*  EOF Формирование возврата покупателя */
 
 
     /* ------------- Формирование пакета товаров из заказа в отгрузку ------------- */

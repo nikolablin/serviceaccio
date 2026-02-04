@@ -29,7 +29,7 @@ class CustomerOrderUpdateHandlerV2
         $orderId = basename((string)($event->meta->href ?? ''));
         if ($orderId === '') return;
 
-        if (!$this->acquireOrderLock($orderId, 180)) {
+        if (!$this->acquireOrderLock($orderId, 60)) {
             Log::orderUpdate('UPDATE: skipped by cache lock', ['orderId' => $orderId]);
             return;
         }

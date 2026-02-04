@@ -28,16 +28,16 @@ class Finish extends AbstractStep
             Log::salesreturnUpdate('Finish: demand not loaded', [ 'href' => $ctx->event->meta->href ?? null, ]);
         }
 
-        $ctx->ms()->updateEntityState(
-                        'demand',
-                        $demand->id,
-                        $ctx->ms()->buildStateMeta('customerorder',Yii::$app->params['moyskladv2']['demands']['states']['closed'])
-                      );
+        // $ctx->ms()->updateEntityState(
+        //                 'demand',
+        //                 $demand->id,
+        //                 $ctx->ms()->buildStateMeta('customerorder',Yii::$app->params['moyskladv2']['demands']['states']['backtostock'])
+        //               );
 
-        $ctx->ms()->updateEntityState(
-                        'customerorder',
-                        $demand->customerOrder->id,
-                        $ctx->ms()->buildStateMeta('customerorder',Yii::$app->params['moyskladv2']['orders']['states']['completed'])
-                      );
+        // $ctx->ms()->updateEntityState(
+        //                 'customerorder',
+        //                 $demand->customerOrder->id,
+        //                 $ctx->ms()->buildStateMeta('customerorder',Yii::$app->params['moyskladv2']['orders']['states']['back'])
+        //               );
     }
 }

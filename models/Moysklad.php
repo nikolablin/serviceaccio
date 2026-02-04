@@ -2083,7 +2083,12 @@ class Moysklad extends Model
   public function createOrder($order,$area,$shopkey)
   {
     $data = (object)array();
-    $data->name = $order->orderId . '_' . $area . '_' . $shopkey;
+
+    $data->name = $order->orderId . '_' . $area;
+
+    if($shopkey):
+      $data->name .= '_' . $shopkey;
+    endif;
 
     if($order->comment):
       $data->description = $order->comment;

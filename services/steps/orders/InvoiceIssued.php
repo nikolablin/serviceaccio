@@ -98,7 +98,7 @@ class InvoiceIssued extends AbstractStep
         else {
           $resp = $ctx->ms()->request('PUT', "entity/customerorder/{$order->id}", $diff['payload']);
           $resetOrder = true;
-          Log::{$log}('InvoiceIssued: MS order updated', [ 'orderId' => $order->id ?? null, 'ok'      => $resp['ok'] ?? false, 'code'    => $resp['code'] ?? null, 'changed' => $diff['changed'] ?? [], ]);
+          Log::{$log}('InvoiceIssued: MS order updated', [ 'orderId' => $order->id ?? null, 'ok' => $resp['ok'] ?? false, 'code'    => $resp['code'] ?? null, 'changed' => $diff['changed'] ?? [], ]);
         }
 
         if (!empty($vatPatches)) {
@@ -286,39 +286,54 @@ class InvoiceIssued extends AbstractStep
             ]
           ];
 
+          // Создаем Входящий платеж, только если оплата Безналичными
           if(!$isCash):
+
             $orderNum  = ($ctx->ms()->getAttributeValue( $demand, Yii::$app->params['moyskladv2']['demands']['attributesFields']['marketPlaceNum'] ) ?: '');
             $options['attributes'][$orderNumberAttr] = ['type' => 'string', 'value' => $orderNum];
+
+            $money = $ctx->ms()->ensureMoneyInFromDemand($demand, $moneyType, $options);
+
+            if ($money && !empty($money->data->id)) {
+                $money        = $money->data;
+                $moneyId      = (string)$money->id;
+                $moneyStateId = basename((string)($money->state->meta->href ?? ''));
+                $orderMsId    = '';
+
+                if (!empty($demand->customerOrder->meta->href)) {
+                    $orderMsId = basename((string)$demand->customerOrder->meta->href);
+                } elseif (!empty($ctx->getOrder()->meta->href)) {
+                    $orderMsId = basename((string)$ctx->getOrder()->meta->href);
+                }
+
+                (new \app\services\repositories\V2MoneyInRepository())->upsert(
+                    (string)$money->id,
+                    (string)$moneyStateId,
+                    (string)$orderMsId,
+                    (string)$moneyType,
+                    (int)($money->sum ?? 0),
+                    json_encode($money, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+                );
+            }
+            else {
+                Log::orderUpdate( "InvoiceIssued: ensureMoneyInFromDemand failed. demand=" . basename((string)($demand->meta->href ?? '')) );
+            }
+
           endif;
-
-          $money = $ctx->ms()->ensureMoneyInFromDemand($demand, $moneyType, $options);
-
-          if ($money && !empty($money->data->id)) {
-              $money        = $money->data;
-              $moneyId      = (string)$money->id;
-              $moneyStateId = basename((string)($money->state->meta->href ?? ''));
-              $orderMsId    = '';
-
-              if (!empty($demand->customerOrder->meta->href)) {
-                  $orderMsId = basename((string)$demand->customerOrder->meta->href);
-              } elseif (!empty($ctx->getOrder()->meta->href)) {
-                  $orderMsId = basename((string)$ctx->getOrder()->meta->href);
-              }
-
-              (new \app\services\repositories\V2MoneyInRepository())->upsert(
-                  (string)$money->id,
-                  (string)$moneyStateId,
-                  (string)$orderMsId,
-                  (string)$moneyType,
-                  (int)($money->sum ?? 0),
-                  json_encode($money, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-              );
-
-          } else {
-              Log::orderUpdate( "InvoiceIssued: ensureMoneyInFromDemand failed. demand=" . basename((string)($demand->meta->href ?? '')) );
-          }
 
         }
 
+
+        // -------------- Счет-фактура ------------------
+
+        if($demand) {
+          $options = [
+            'stateId'     => Yii::$app->params['moyskladv2']['factureOut']['states']['created'],
+            'applicable'  => true,
+            'moment'      => date('Y-m-d H:i:s'),
+            'created'     => date('Y-m-d H:i:s'),
+          ];
+          $factureout = $ctx->ms()->ensureFactureoutFromDemand($demand, $options);
+        }
     }
 }

@@ -1,11 +1,11 @@
 <?php
-// use app\models\CashRegister;
-// use app\models\Kaspi;
-// use app\models\Whatsapp;
-// use app\models\Moysklad;
-// use app\models\MoyskladWebhook;
-//
-//
+use app\models\CashRegister;
+use app\models\Kaspi;
+use app\models\Whatsapp;
+use app\models\Moysklad;
+use app\models\MoyskladWebhook;
+
+
 // ini_set('display_errors', '1');
 // error_reporting(E_ALL);
 //
@@ -13,7 +13,7 @@
 // $moysklad = new MoyskladWebhook();
 
 // $moysklad->disableWebhook('fe487bd0-a40f-11ee-0a80-0411002fa50b');
-// $moysklad->createWebhook('https://service.accio.kz/webhook/updatesalesreturn','UPDATE','salesreturn');
+// $moysklad->createWebhook('https://service.accio.kz/webhook/updatefactureout','UPDATE','factureout');
 
 // $orderHref = 'https://api.moysklad.ru/api/remap/1.2/entity/customerorder/110416e9-ee35-11f0-0a80-17c801ead99d';
 //

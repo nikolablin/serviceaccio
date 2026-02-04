@@ -38,7 +38,7 @@ class DemandUpdateHandlerV2
           return;
         }
 
-        if (!$this->acquireDemandLock((string)$demand->id, 20)) {
+        if (!$this->acquireDemandLock((string)$demand->id, 5)) {
             Log::demandUpdate('UPDATE: skipped by cache lock (duplicate webhook / parallel run)', [ 'demandId' => (string)$demand->id, ]);
             return;
         }

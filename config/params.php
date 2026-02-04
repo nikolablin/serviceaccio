@@ -6,6 +6,11 @@ return [
     'senderName' => 'Example.com mailer',
     'cronToken' => 'GNIWRNB82589NVWU',
 
+    'halyk' => [
+      'client_id' => 'HMM_910407300181',
+      'client_secret' => 'aEUr_RaIENZi'
+    ],
+
     'wolt' => [
       'baseUrl'           => 'https://pos-integration-service.wolt.com/',
       'token'             => 'f539fcc5c3bcaf861f52fa6b278728a347abf251a6d336f3f28c3d2445e7a1fb',
@@ -85,6 +90,12 @@ return [
         ]
       ],
 
+      'factureOut' => [
+        'states' => [
+          'created' => '5dd3895d-0bbf-11ec-0a80-057d001991fa'
+        ]
+      ],
+
       'moneyin' => [
         'states' => [
           'paymentin' => [
@@ -135,7 +146,7 @@ return [
       ],
 
       'demands' => [
-        'expand' => 'state,customerOrder,attributes,agent,organization,positions.assortment,owner',
+        'expand' => 'state,customerOrder,attributes,agent,organization,positions.assortment,owner,factureout',
         'states' => [
           'acceptBack'        => '2a6c9db5-a7c4-11ed-0a80-10870015e950',
           'assembled'         => 'eeed10b7-51a2-11ec-0a80-02ee0032e089',
@@ -205,6 +216,18 @@ return [
         'states' => [
           'finish' => '88b390bc-87dc-11ec-0a80-0fbe0028a739',
         ],
+
+        'attributesFields' => [
+          'backReason' => '245c1e2c-857c-11ec-0a80-00ca00032d13'
+        ],
+
+        'attributesFieldsDictionaries' => [
+          'backReason' => 'e374d372-857b-11ec-0a80-0fbe0003a99c'
+        ],
+
+        'attributesFieldsDictionariesValues' => [
+          'backReason1' => 'f3aa06bf-857b-11ec-0a80-07b7000347ae' // Передумал покупать
+        ]
       ],
 
       'kaspiProjects' => [

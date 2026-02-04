@@ -17,10 +17,12 @@ class Context
     private ?object $paymentIn = null;
     private ?object $cashIn = null;
     private ?object $salesreturn = null;
+    private ?object $factureOut = null;
 
     public ?string $msOrderId = null;
     public ?string $msDemandId = null;
     public ?string $msSalesreturnId = null;
+    public ?string $msFactureoutId = null;
 
 
     private ?MoyskladV2 $ms = null;
@@ -184,7 +186,45 @@ class Context
         return $this->msDemand;
     }
 
-    /* Вернет объект счета покупателю из МС (если возможно) */
+    public function getDemandFromFactureout(?object $factureOut = null): ?object
+    {
+        $factureOut = $factureOut ?: $this->getFactureout();
+        if (!$factureOut) return null;
+
+        $href = $factureOut->demands[0]->meta->href ?? null;
+        if (!$href || !is_string($href)) return null;
+
+        // expand для demand (как у тебя в params)
+        $expand = Yii::$app->params['moyskladv2']['demands']['expand'] ?? '';
+        if ($expand) {
+            $href .= (str_contains($href, '?') ? '&' : '?') . 'expand=' . rawurlencode($expand);
+        }
+
+        $demand = $this->ms()->getHrefData($href);
+        if (!$demand || empty($demand->id)) return null;
+
+        // запомним в контексте, чтобы дальше Context::getDemand() возвращал уже это
+        $this->msDemand   = $demand;
+        $this->msDemandId = (string)$demand->id;
+
+        // если positions не развернулись — дотянем rows с assortment
+        if (
+            isset($this->msDemand->positions)
+            && (!isset($this->msDemand->positions->rows) || !is_array($this->msDemand->positions->rows))
+            && isset($this->msDemand->positions->meta->href)
+        ) {
+            $posHref = (string)$this->msDemand->positions->meta->href;
+            $posHref .= (str_contains($posHref, '?') ? '&' : '?') . 'expand=' . rawurlencode('assortment');
+
+            $pos = $this->ms()->getHrefData($posHref);
+            if ($pos && isset($pos->rows) && is_array($pos->rows)) {
+                $this->msDemand->positions->rows = $pos->rows;
+            }
+        }
+
+        return $this->msDemand;
+    }
+
     public function getInvoice(): ?object
     {
         if ($this->invoiceOut) {
@@ -205,6 +245,39 @@ class Context
             if ($inv && !empty($inv->id)) {
                 $this->invoiceOut = $inv;
                 return $this->invoiceOut;
+            }
+        }
+
+        return null;
+    }
+
+    public function getFactureout(): ?object
+    {
+        if ($this->factureOut !== null) {
+          return $this->factureOut;
+        }
+
+        if ($this->msFactureoutId) {
+            $this->factureOut = $this->ms()->getHrefData(
+                "https://api.moysklad.ru/api/remap/1.2/entity/factureout/" . $this->msFactureoutId
+            );
+            return $this->factureOut;
+        }
+
+        $demand = $this->getDemand();
+        if (!$demand) return null;
+
+        $href = null;
+        if (isset($demand->factureOut) && is_object($demand->factureOut)) {
+            $href = $demand->factureOut->meta->href ?? null;
+        }
+
+        if ($href && is_string($href)) {
+            $sr = $this->ms()->getHrefData($href);
+            if ($sr && !empty($sr->id)) {
+                $this->factureOut = $sr;
+                $this->msFactureoutId = (string)$sr->id;
+                return $this->factureOut;
             }
         }
 
@@ -299,7 +372,7 @@ class Context
         if (!$order) {
             return null;
         }
- 
+
         $resolver = new OrdersConfigResolverV2();
         $this->config = $resolver->resolve($order, $this->ms());
 

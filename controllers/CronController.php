@@ -14,6 +14,8 @@ use app\models\Whatsapp;
 use app\models\KaspiOrders;
 use app\models\OrdersConfigTable;
 use app\models\CashRegister;
+use app\models\Halyk;
+use app\models\HalykOrders;
 
 class CronController extends Controller
 {
@@ -47,6 +49,8 @@ class CronController extends Controller
         // }
     }
 
+    /* KASPI */
+
     public function actionSetkaspiorders() // Создание заказов Каспи
     {
       $moysklad     = new Moysklad();
@@ -64,9 +68,6 @@ class CronController extends Controller
         $orders = $kaspi->getKaspiOrders($shopkey,'NEW');
 
         file_put_contents(__DIR__ . '/../logs/kaspi/kaspiCreateOrders.txt', date('d.m.Y H:i') . PHP_EOL . $shopkey . PHP_EOL . print_r($orders,true) . PHP_EOL . PHP_EOL,FILE_APPEND);
-
-        // $orders = file_get_contents(__DIR__ . '/kaspitest.json');
-        // $orders = json_decode($orders);
 
         if(!empty($orders->data)){
           $moySkladRemains  = $moysklad->getProductsRemains(); // 023870f6-ee91-11ea-0a80-05f20007444d - almaty, 805d5404-3797-11eb-0a80-01b1001ba27a - astana, 1e1187c1-85e6-11ed-0a80-0dbe006f385b - БЦ Success
@@ -397,7 +398,7 @@ class CronController extends Controller
                   $setTgMessage = false;
                   $returnType   = null;
 
-                  switch ($prevStatus) { 
+                  switch ($prevStatus) {
                       case 'created': // Без чека - Возврат на склад
                           $demandStateMeta = $moysklad->buildStateMeta(
                               'demand',
@@ -508,9 +509,196 @@ class CronController extends Controller
       }
     }
 
+    /* EOF KASPI */
+
+
+    /* HALYK */
+
+    public function actionSethalykorders() // Создание заказов Halyk
+    {
+
+      $halyk      = new Halyk();
+      $website    = new Website();
+      $moysklad   = new Moysklad();
+      $halykOrders= new HalykOrders();
+
+      $halykToken = $halyk->getHalykToken();
+
+      $dateTo   = new \DateTime();
+      $dateFrom = (clone $dateTo)->modify('-10 minutes');
+
+      $orders   = $halyk->getHalykOrders($halykToken->access_token,'APPROVED_BY_BANK',$dateFrom,$dateTo);
+print('<pre>');
+print_r($orders);
+print('</pre>');
+exit();
+      if($orders->totalCount > 0){
+        $moySkladRemains  = $moysklad->getProductsRemains(); // 023870f6-ee91-11ea-0a80-05f20007444d - almaty, 805d5404-3797-11eb-0a80-01b1001ba27a - astana, 1e1187c1-85e6-11ed-0a80-0dbe006f385b - БЦ Success
+        $moySkladRemains  = json_decode($moySkladRemains);
+        $moySkladCities   = $moysklad->getMoySkladCities();
+
+        foreach ($orders->data as $order) {
+          $curentDate         = new \DateTime();
+          $addOrderToMoySklad = true;
+          $moySkladOrders     = self::checkOrderInMoySklad($order->attributes->code);
+
+          if(!$moySkladOrders) {
+
+            $creatingOrder = (object)array();
+
+            // Products
+            $productsData = $halyk->getHalykOrderProducts($halykToken->access_token,$order->id);
+
+            switch ($order->attributes->deliveryAddress->town){
+              case 'Astana':
+                $orderPickupPointCity = 'astana';
+                $orderPickupPointId = 'acciostore_pp2';
+                break;
+              default:
+                $orderPickupPointCity = 'almaty';
+                $orderPickupPointId = 'acciostore_pp1';
+            }
+
+            $creatingOrder->products      = [];
+            $creatingOrder->orderStatus   = 'd3e01366-75ca-11eb-0a80-02590037e535'; // d3e01366-75ca-11eb-0a80-02590037e535 - Подтвержден - К отправке, c4d8f685-a7c3-11ed-0a80-10870015dd4a - Собран, 02482aa0-ee91-11ea-0a80-05f20007446d - Взять в работу
+            $creatingOrder->comment       = false;
+
+            foreach ($productsData[0]->orderItemDetails as $orderProduct) {
+              $productWebSiteData     = $website->getProductWebDataBySku($orderProduct->skuCode);
+
+              if($productWebSiteData){
+                $productRemainsInStock  = $moysklad->productRemainsCheckByArray($orderProduct->skuCode,$orderProduct->skuQuantity,$moySkladRemains,$productWebSiteData['product_id']);
+
+                foreach ($productRemainsInStock as $key => $remain) {
+                  if($key == $orderPickupPointCity){
+                    if($remain < $orderProduct->skuQuantity){
+                      $creatingOrder->orderStatus = '02482aa0-ee91-11ea-0a80-05f20007446d';
+                    }
+                  }
+                }
+
+                file_put_contents(__DIR__ . '/../logs/halyk/halykOrders_' . date('Ymd') . '.txt', '-------------PRODUCT WEB SITE DATA--------------' . PHP_EOL . print_r($productWebSiteData,true) . PHP_EOL . PHP_EOL  . PHP_EOL, FILE_APPEND);
+
+                if($productWebSiteData['product_type'] == 'bundle'){
+                  $creatingOrder->comment = 'В заказе есть комплект!';
+                }
+
+                $prObj            = (object)array();
+                $prObj->title     = $orderProduct->skuName;
+                $prObj->sku       = $orderProduct->skuCode;
+                $prObj->pid       = $productWebSiteData['product_id'];
+                $prObj->quantity  = $orderProduct->skuQuantity;
+                $prObj->price     = round($orderProduct->skuPrice,0);
+                $prObj->type      = $productWebSiteData['product_type'];
+                $creatingOrder->products[] = $prObj;
+              }
+              else {
+                $addOrderToMoySklad = false;
+                Telegram::sendTelegramMessage('Ошибка создания заказа Halyk #' . $order->attributes->code. '. Не найден товар SKU - ' . $orderProduct->skuCode . '.', 'kaspi');
+              }
+            }
+
+            // CREATE CONTRAGENT
+            $halykUser        = $order->attributes->customer;
+            $halykUserName    = $halykUser->firstName;
+            $halykUserSurname = $halykUser->lastName;
+            $halykUserPhone   = $halykUser->cellPhone;
+            if($halykUserPhone[0] != '8' OR $halykUserPhone[0] != '+'){
+              $halykUserPhone = '+7' . $halykUserPhone;
+            }
+            $msContragent     = $moysklad->searchContragentByPhone($halykUserPhone);
+            if(!$msContragent){ $msContragent = $moysklad->createContragent($halykUserSurname . ' ' . $halykUserName, $halykUserPhone, ''); }
+
+            // CREATING ORDER
+            $creatingOrder->stock           = $orderPickupPointId;
+            $creatingOrder->organization    = '640cb82e-82af-11ed-0a80-07fe00255908'; // ИП Accio Retail Store
+            $creatingOrder->project         = '842c5548-c90c-11f0-0a80-1aee002c13e9'; // 🟢 Halyk Market
+            $creatingOrder->contragent      = $msContragent->id;
+
+            if($orderPickupPointCity == 'astana'){
+              $creatingOrder->warehouse = '805d5404-3797-11eb-0a80-01b1001ba27a';
+            }
+            else {
+              $creatingOrder->warehouse = '023870f6-ee91-11ea-0a80-05f20007444d';
+            }
+
+            $creatingOrder->halykOrderId    = $order->attributes->code;
+            $creatingOrder->halykOrderExtId = $order->id;
+
+            $creatingOrder->deliveryType = 'a9a80568-aac8-11ed-0a80-0e7e0027ddb8';
+            switch($order->attributes->deliveryMode){
+              case 'PHYSICAL_PICKUP': // Самовывоз
+                $creatingOrder->deliveryDate = false;
+                $creatingOrder->deliveryTime = false;
+                $creatingOrder->deliveryType = 'c45aea40-54cd-11ec-0a80-095800022a93';
+                break;
+              case 'EXPRESS': // доставка Halyk Market в течение 3 часов
+                $creatingOrder->deliveryDate = $curentDate->format('Y-m-d');
+                // $creatingOrder->deliveryTime = $curentDate->modify('+3 hours')->format('H:i');
+                $creatingOrder->deliveryTime = '31d9bfaf-c2ac-11eb-0a80-001f00062692'; // 10:00 - 18:00
+                break;
+              case 'PHYSICAL_SHIP': // доставка о двери (Halyk Market и собственная)
+                $creatingOrder->deliveryDate = $curentDate->format('Y-m-d');
+                $creatingOrder->deliveryTime = '31d9bfaf-c2ac-11eb-0a80-001f00062692'; // 10:00 - 18:00
+                break;
+              case 'NDD': // доставка Halyk Market на следующий день (или на день после, если заказ был совершен во второй половине дня)
+                $creatingOrder->deliveryDate = $curentDate->modify('+1 days')->format('Y-m-d');
+                $creatingOrder->deliveryTime = '31d9bfaf-c2ac-11eb-0a80-001f00062692'; // 10:00 - 18:00
+                break;
+              case 'PVZ': // доставка Halyk Market в ПВЗ
+                $creatingOrder->deliveryDate = $curentDate->format('Y-m-d');
+                $creatingOrder->deliveryTime = '31d9bfaf-c2ac-11eb-0a80-001f00062692'; // 10:00 - 18:00
+                break;
+            }
+
+            $creatingOrder->paymentStatus   = '302da776-c29d-11eb-0a80-093a0003ad4a'; // Статус оплаты - оплачен
+            $creatingOrder->paymentType     = 'f3ba6f2e-836c-11ed-0a80-091600349330'; // Тип оплаты - Безналичный расчет
+            $creatingOrder->fiscalBill      = 'c3c0ee4f-a4e7-11eb-0a80-075b00176e05'; // Фискальный чек нужен
+            $creatingOrder->cityStr         = '';
+            $creatingOrder->address         = '';
+            $creatingOrder->halykDeliveryCost = property_exists($order->attributes,'deliveryCost') ? (string)$order->attributes->deliveryCost : (string)0;
+
+            if(property_exists($order->attributes,'deliveryAddress')):
+              $creatingOrder->cityStr       = $order->attributes->deliveryAddress->town;
+              $creatingOrder->city          = $moysklad->getCityId($order->attributes->deliveryAddress->town,$moySkladCities);
+              $creatingOrder->address       = $order->attributes->deliveryAddress->formattedAddress;
+            else:
+              $creatingOrder->city          = 'ce22d9f6-4941-11ed-0a80-00bd000e47e9';
+            endif;
+
+            $creatingOrder->autoorder = true;
+
+            if($addOrderToMoySklad){
+              $halykOrders->add($creatingOrder->orderId,$creatingOrder->orderExtId,'created');
+
+              $creatingOrderMS = $moysklad->createOrder($creatingOrder,'halyk',false);
+
+              if(property_exists($creatingOrderMS,'errors')){
+                $errorsStr = '';
+                foreach ($creatingOrderMS->errors as $error) {
+                  $errorsStr .= $error->error . PHP_EOL;
+                }
+                Telegram::sendTelegramMessage('Ошибка создания заказа Halyk #' . $order->attributes->code . '. Ответ МойСклад:' . PHP_EOL . $errorsStr, 'halyk');
+              }
+              else {
+                self::setHalykOrderStatus($creatingOrder,'ACCEPTED_BY_MERCHANT',$halykToken->access_token);
+                Telegram::sendTelegramMessage('Заказ Halyk #' . $order->attributes->code . ' успешно добавлен в МойСклад.', 'halyk');
+              }
+            }
+          }
 
 
 
+
+
+
+
+        }
+      }
+
+    }
+
+    /* EOF HALYK */
 
     /*
     Закрытие смен всех касс.

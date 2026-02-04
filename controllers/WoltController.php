@@ -234,7 +234,7 @@ class WoltController extends Controller
 
                   if($addOrderToMoySklad){
                     try {
-                        $msOrder = $moysklad->createOrder($creatingOrder, 'wolt', $order['order_number']);
+                        $msOrder = $moysklad->createOrder($creatingOrder, 'wolt', false);
 
                         $imported = $woltimporter->upsertOrder($order);
 

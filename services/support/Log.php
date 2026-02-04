@@ -25,6 +25,11 @@ class Log
         self::write('salesreturn.update', $message, $context);
     }
 
+    public static function factureoutUpdate(string $message, array $context = []): void
+    {
+        self::write('factureout.update', $message, $context);
+    }
+
     public static function cashboxError(string $message, array $context = []): void
     {
         self::write('cashbox.error', '[CASHBOX] ' . $message, $context);

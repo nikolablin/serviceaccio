@@ -29,7 +29,7 @@ class SalesreturnUpdateHandlerV2
         $salesreturnId = basename((string)($event->meta->href ?? ''));
         if ($salesreturnId === '') return;
 
-        if (!$this->acquireSalesreturnLock((string)$salesreturnId, 60)) {
+        if (!$this->acquireSalesreturnLock((string)$salesreturnId, 5)) {
             Log::salesreturnUpdate('UPDATE: skipped by cache lock (duplicate webhook / parallel run)', [ 'salesreturnId' => (string)$salesreturnId, ]);
             return;
         }

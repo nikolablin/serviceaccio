@@ -101,6 +101,18 @@ $config = [
                         return date('Y-m-d H:i:s');
                     },
                 ],
+
+                // 4) обновление счет-фактуры
+                [
+                    'class' => yii\log\FileTarget::class,
+                    'levels' => ['info', 'warning', 'error'],
+                    'categories' => ['factureout.update'],
+                    'logFile' => '@runtime/logs/factureout_update.log',
+                    'logVars' => [],
+                    'prefix' => function () {
+                        return date('Y-m-d H:i:s');
+                    },
+                ],
             ],
         ],
 

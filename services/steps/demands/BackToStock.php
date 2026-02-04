@@ -149,6 +149,24 @@ class BackToStock extends AbstractStep
           }
         endif;
 
+        // Создаем/Обновляем Вовзрат покупателя
+        $salesreturn = $ctx->getSalesreturn();
+
+        $backReason = Yii::$app->params['moyskladv2']['salesreturn']['attributesFields']['backReason'];
+        $options = [
+          'stateId' => Yii::$app->params['moyskladv2']['salesreturn']['states']['finish'],
+          'applicable' => false,
+          'attributes' => [
+            $backReason => [
+                              'type' => 'customentity',
+                              'value' => Yii::$app->params['moyskladv2']['salesreturn']['attributesFieldsDictionariesValues']['backReason1'],
+                              'dictionary' => Yii::$app->params['moyskladv2']['salesreturn']['attributesFieldsDictionaries']['backReason']
+                           ]
+          ]
+        ];
+
+        $ctx->ms()->ensureSalesReturnFromDemand($demand,$salesreturn,$options);
+
         // Обновляем отгрузку
         if (!empty($patch)) {
           $ctx->ms()->request('PUT', "entity/demand/{$demand->id}", $patch);

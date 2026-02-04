@@ -12,6 +12,7 @@ use app\services\handlers\CustomerOrderCreateHandlerV2;
 use app\services\handlers\CustomerOrderUpdateHandlerV2;
 use app\services\handlers\DemandUpdateHandlerV2;
 use app\services\handlers\SalesreturnUpdateHandlerV2;
+use app\services\handlers\FactureOutUpdateHandlerV2;
 
 class WebhookController extends Controller
 {
@@ -154,6 +155,9 @@ class WebhookController extends Controller
                     case 'salesreturn':
                         (new SalesreturnUpdateHandlerV2())->handle($event);
                         break;
+                    case 'factureout':
+                        (new FactureOutUpdateHandlerV2())->handle($event);
+                        break;
                     default:
                         file_put_contents($logFile, "SKIP: unknown type={$type}\n", FILE_APPEND);
                         break;
@@ -199,37 +203,45 @@ class WebhookController extends Controller
       );
     }
 
+    public function actionUpdatefactureout() // Обновление счет-фактур
+    {
+      return $this->handleWebhook(
+          __DIR__ . '/../logs/ms_service/factureout.txt'
+      );
+    }
+
     /* EOF Вебхуки Мойсклад */
 
 
     /* Тестовые экшены */
 
-    // public function actionTestMsV2()
-    // {
-    //     $this->layout = false;
-    //     \Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
-    //
-    //     $json = \Yii::$app->request->post('json');
-    //     if (!$json) {
-    //         // можно и в коде хранить дефолт
-    //         // $json = '{"events":[{"meta":{"type":"customerorder","href":"https://api.moysklad.ru/api/remap/1.2/entity/customerorder/ceae17f1-f560-11f0-0a80-045f000094d7"},"action":"UPDATE","accountId":"021a4ccc-ee91-11ea-0a80-09f000002b18"}]}';
-    //         // $json = '{"events":[{"meta":{"type":"demand","href":"https://api.moysklad.ru/api/remap/1.2/entity/demand/7f6f5f31-f543-11f0-0a80-1474007f29b9"},"action":"UPDATE","accountId":"021a4ccc-ee91-11ea-0a80-09f000002b18"}]}';
-    //     }
-    //
-    //     $payload = json_decode($json);
-    //     if (!$payload || empty($payload->events)) {
-    //         return ['ok' => false, 'error' => 'bad json'];
-    //     }
-    //
-    //     // берём первый event
-    //     $event = $payload->events[0];
-    //
-    //     // вызов нужного handler-а (V2)
-    //     $handler = new \app\services\handlers\DemandUpdateHandlerV2();
-    //     $handler->handle($event);
-    //
-    //     return ['ok' => true, 'handled' => true, 'type' => $event->meta->type ?? null, 'action' => $event->action ?? null];
-    // }
+    public function actionTestMsV2()
+    {
+        $this->layout = false;
+        \Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
+
+        $json = \Yii::$app->request->post('json');
+        if (!$json) {
+            // можно и в коде хранить дефолт
+            $json = '{"auditContext":{"meta":{"type":"audit","href":"https://api.moysklad.ru/api/remap/1.2/audit/79df3466-003a-11f1-0a80-0c6e00371834"},"uid":"fin@2336623","moment":"2026-02-02 16:24:17"},"events":[{"meta":{"type":"demand","href":"https://api.moysklad.ru/api/remap/1.2/entity/demand/0e45d86d-fc46-11f0-0a80-048400400476"},"updatedFields":["state"],"action":"UPDATE","accountId":"021a4ccc-ee91-11ea-0a80-09f000002b18"}]}';
+            // $json = '{"events":[{"meta":{"type":"customerorder","href":"https://api.moysklad.ru/api/remap/1.2/entity/customerorder/ceae17f1-f560-11f0-0a80-045f000094d7"},"action":"UPDATE","accountId":"021a4ccc-ee91-11ea-0a80-09f000002b18"}]}';
+            // $json = '{"events":[{"meta":{"type":"demand","href":"https://api.moysklad.ru/api/remap/1.2/entity/demand/7f6f5f31-f543-11f0-0a80-1474007f29b9"},"action":"UPDATE","accountId":"021a4ccc-ee91-11ea-0a80-09f000002b18"}]}';
+        }
+
+        $payload = json_decode($json);
+        if (!$payload || empty($payload->events)) {
+            return ['ok' => false, 'error' => 'bad json'];
+        }
+
+        // берём первый event
+        $event = $payload->events[0];
+
+        // вызов нужного handler-а (V2)
+        $handler = new \app\services\handlers\DemandUpdateHandlerV2();
+        $handler->handle($event);
+
+        return ['ok' => true, 'handled' => true, 'type' => $event->meta->type ?? null, 'action' => $event->action ?? null];
+    }
 
     /* EOF Тестовые экшены */
 }

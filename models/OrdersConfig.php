@@ -198,7 +198,8 @@ class OrdersConfig extends Model
                 2 => 'Сайт - 🟣 Forte Online Payment',
                 3 => 'Сайт - Kaspi QR',
                 4 => 'Сайт - Halyk QR',
-                4 => 'Сайт - Kaspi Link',
+                6 => 'Сайт - Kaspi Link',
+                7 => 'Сайт - Halyk Link',
             ];
 
             $form  = '<form name="order-config">';
